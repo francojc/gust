@@ -1,0 +1,25 @@
+[package]
+name = "gust"
+version = "0.1.0"
+edition = "2021"
+description = "A terminal-based weather dashboard"
+license = "MIT"
+repository = "https://github.com/francojc/gust"
+
+[dependencies]
+ratatui = "0.30"
+crossterm = { version = "0.28", features = ["event-stream"] }
+tokio = { version = "1", features = ["full"] }
+reqwest = { version = "0.12", features = ["json"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+chrono = { version = "0.4", features = ["serde"] }
+color-eyre = "0.6"
+dirs = "5"
+toml = "0.8"
+tracing = "0.1"
+tracing-subscriber = "0.3"
+urlencoding = "2"
+
+[dev-dependencies]
+insta = "1"

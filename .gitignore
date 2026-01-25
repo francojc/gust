@@ -4,7 +4,6 @@ result
 
 # Rust
 /target/
-Cargo.lock
 
 # Editor
 .idea/

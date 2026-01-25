@@ -2,7 +2,7 @@
 
 ## Project Status
 
-- [ ] Stage 1: Project Setup & Architecture
+- [x] Stage 1: Project Setup & Architecture
 - [ ] Stage 2: Data Layer
 - [ ] Stage 3: Static UI
 - [ ] Stage 4: Visualization
@@ -61,13 +61,13 @@ src/
 
 - [x] Create brainstorm.md
 - [x] Create development plan
-- [ ] Initialize Cargo project
-- [ ] Set up Nix development environment
-- [ ] Add dependencies to Cargo.toml
-- [ ] Implement Elm Architecture skeleton
-- [ ] Set up error handling with color-eyre
-- [ ] Create configuration system
-- [ ] Write initial test infrastructure
+- [x] Initialize Cargo project
+- [x] Set up Nix development environment
+- [x] Add dependencies to Cargo.toml
+- [x] Implement Elm Architecture skeleton
+- [x] Set up error handling with color-eyre
+- [x] Create configuration system
+- [x] Write initial test infrastructure
 
 ### Dependencies (Cargo.toml)
 
