@@ -6,7 +6,7 @@ use std::fs;
 use std::path::PathBuf;
 
 /// Main application configuration.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(default)]
 pub struct AppConfig {
     pub location: LocationConfig,
@@ -15,7 +15,7 @@ pub struct AppConfig {
 }
 
 /// Location-related settings.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(default)]
 pub struct LocationConfig {
     /// Default location to load on startup.
@@ -44,25 +44,6 @@ pub struct BehaviorConfig {
     pub refresh_interval: u64,
     /// Cache TTL in seconds.
     pub cache_duration: u64,
-}
-
-impl Default for AppConfig {
-    fn default() -> Self {
-        Self {
-            location: LocationConfig::default(),
-            display: DisplayConfig::default(),
-            behavior: BehaviorConfig::default(),
-        }
-    }
-}
-
-impl Default for LocationConfig {
-    fn default() -> Self {
-        Self {
-            default: String::new(),
-            favorites: Vec::new(),
-        }
-    }
 }
 
 impl Default for DisplayConfig {

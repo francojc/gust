@@ -1,10 +1,10 @@
 //! API response types for Open-Meteo.
 
 use chrono::{DateTime, Utc};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 /// Response from the Open-Meteo forecast API.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct ForecastResponse {
     pub latitude: f64,
     pub longitude: f64,
@@ -15,7 +15,7 @@ pub struct ForecastResponse {
 }
 
 /// Current weather data from API.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct CurrentResponse {
     pub time: DateTime<Utc>,
     pub temperature_2m: f64,
@@ -28,7 +28,7 @@ pub struct CurrentResponse {
 }
 
 /// Hourly forecast data from API.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct HourlyResponse {
     pub time: Vec<DateTime<Utc>>,
     pub temperature_2m: Vec<f64>,
@@ -38,7 +38,7 @@ pub struct HourlyResponse {
 }
 
 /// Daily forecast data from API.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct DailyResponse {
     pub time: Vec<DateTime<Utc>>,
     pub temperature_2m_max: Vec<f64>,

@@ -3,7 +3,9 @@
 #![allow(dead_code)]
 
 mod client;
+pub mod convert;
 mod geocoding;
+pub mod mock;
 mod types;
 
 #[allow(unused_imports)]

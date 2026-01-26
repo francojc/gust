@@ -107,7 +107,7 @@ impl Cache {
     pub fn clear(&self) -> Result<()> {
         for entry in fs::read_dir(&self.cache_dir)? {
             let entry = entry?;
-            if entry.path().extension().map_or(false, |e| e == "json") {
+            if entry.path().extension().is_some_and(|e| e == "json") {
                 fs::remove_file(entry.path())?;
             }
         }

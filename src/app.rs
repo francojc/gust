@@ -15,6 +15,7 @@ use ratatui::{
     Frame,
 };
 
+use crate::api::GeocodingResult;
 use crate::config::AppConfig;
 
 /// Location data.
@@ -94,7 +95,7 @@ pub enum InputMode {
 }
 
 /// Main application state.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct AppState {
     pub location: Location,
     pub current: Option<CurrentWeather>,
@@ -105,6 +106,8 @@ pub struct AppState {
     pub input_mode: InputMode,
     pub input_buffer: String,
     pub loading: bool,
+    pub fetch_in_progress: bool,
+    pub pending_search: Option<String>,
     pub error: Option<String>,
     pub last_updated: Option<DateTime<Utc>>,
     pub config: AppConfig,
@@ -120,6 +123,8 @@ pub enum Message {
     WeatherReceived(Result<WeatherData, String>),
     /// Weather alerts received from API.
     AlertsReceived(Result<Vec<WeatherAlert>, String>),
+    /// Location search result received.
+    LocationReceived(Result<GeocodingResult, String>),
     /// Timer tick for auto-refresh.
     Tick,
     /// Manual refresh requested.
@@ -136,33 +141,26 @@ pub struct WeatherData {
     pub daily: Vec<DailyForecast>,
 }
 
-impl Default for AppState {
-    fn default() -> Self {
-        Self {
-            location: Location::default(),
-            current: None,
-            hourly: Vec::new(),
-            daily: Vec::new(),
-            alerts: Vec::new(),
-            selected_tab: Tab::default(),
-            input_mode: InputMode::default(),
-            input_buffer: String::new(),
-            loading: false,
-            error: None,
-            last_updated: None,
-            config: AppConfig::default(),
-            should_quit: false,
-        }
-    }
-}
-
 impl AppState {
     /// Create a new application state with the given configuration.
+    ///
+    /// If no default location is configured, starts in search mode.
     pub fn new(config: AppConfig) -> Self {
-        Self {
-            config,
+        let has_default_location = !config.location.default.is_empty();
+        let mut state = Self {
+            config: config.clone(),
             ..Default::default()
+        };
+
+        if has_default_location {
+            // Trigger search for default location on startup
+            state.pending_search = Some(config.location.default.clone());
+        } else {
+            // Start in search mode if no default location
+            state.input_mode = InputMode::Search;
         }
+
+        state
     }
 
     /// Update the application state based on a message.
@@ -174,6 +172,7 @@ impl AppState {
             Message::Input(key) => self.handle_input(key),
             Message::WeatherReceived(result) => self.handle_weather_received(result),
             Message::AlertsReceived(result) => self.handle_alerts_received(result),
+            Message::LocationReceived(result) => self.handle_location_received(result),
             Message::Tick => self.handle_tick(),
             Message::Refresh => self.handle_refresh(),
             Message::Quit => self.should_quit = true,
@@ -204,8 +203,10 @@ impl AppState {
                     self.input_buffer.clear();
                 }
                 KeyCode::Enter => {
+                    if !self.input_buffer.is_empty() {
+                        self.pending_search = Some(self.input_buffer.clone());
+                    }
                     self.input_mode = InputMode::Normal;
-                    // TODO: Trigger location search
                     self.input_buffer.clear();
                 }
                 KeyCode::Char(c) => self.input_buffer.push(c),
@@ -237,6 +238,24 @@ impl AppState {
         match result {
             Ok(alerts) => self.alerts = alerts,
             Err(e) => self.error = Some(e),
+        }
+    }
+
+    fn handle_location_received(&mut self, result: Result<GeocodingResult, String>) {
+        self.fetch_in_progress = false;
+        match result {
+            Ok(loc) => {
+                self.location = Location {
+                    name: loc.display_name(),
+                    latitude: loc.latitude,
+                    longitude: loc.longitude,
+                };
+                self.loading = true;
+                self.error = None;
+            }
+            Err(e) => {
+                self.error = Some(e);
+            }
         }
     }
 
@@ -393,6 +412,7 @@ impl AppState {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::api::{convert, mock};
     use crossterm::event::KeyCode;
 
     #[test]
@@ -401,6 +421,8 @@ mod tests {
         assert!(!state.should_quit);
         assert_eq!(state.selected_tab, Tab::Temperature);
         assert_eq!(state.input_mode, InputMode::Normal);
+        assert!(!state.fetch_in_progress);
+        assert!(state.pending_search.is_none());
     }
 
     #[test]
@@ -442,5 +464,138 @@ mod tests {
         let key = KeyEvent::new(KeyCode::Esc, crossterm::event::KeyModifiers::NONE);
         state.handle_input(key);
         assert_eq!(state.input_mode, InputMode::Normal);
+    }
+
+    #[test]
+    fn test_search_submit_sets_pending() {
+        let mut state = AppState::default();
+
+        // Enter search mode
+        let key = KeyEvent::new(KeyCode::Char('/'), crossterm::event::KeyModifiers::NONE);
+        state.handle_input(key);
+
+        // Type query
+        for c in "New York".chars() {
+            let key = KeyEvent::new(KeyCode::Char(c), crossterm::event::KeyModifiers::NONE);
+            state.handle_input(key);
+        }
+
+        // Submit search
+        let key = KeyEvent::new(KeyCode::Enter, crossterm::event::KeyModifiers::NONE);
+        state.handle_input(key);
+
+        assert_eq!(state.input_mode, InputMode::Normal);
+        assert_eq!(state.pending_search, Some("New York".to_string()));
+        assert!(state.input_buffer.is_empty());
+    }
+
+    #[test]
+    fn test_empty_search_not_submitted() {
+        let mut state = AppState::default();
+
+        // Enter search mode
+        let key = KeyEvent::new(KeyCode::Char('/'), crossterm::event::KeyModifiers::NONE);
+        state.handle_input(key);
+
+        // Submit empty search
+        let key = KeyEvent::new(KeyCode::Enter, crossterm::event::KeyModifiers::NONE);
+        state.handle_input(key);
+
+        assert_eq!(state.input_mode, InputMode::Normal);
+        assert!(state.pending_search.is_none());
+    }
+
+    #[test]
+    fn test_weather_received_success() {
+        let mut state = AppState::default();
+        state.loading = true;
+
+        let mock_resp = mock::mock_forecast_response();
+        let data = convert::forecast_to_weather_data(mock_resp);
+
+        state.update(Message::WeatherReceived(Ok(data)));
+
+        assert!(!state.loading);
+        assert!(state.error.is_none());
+        assert!(state.current.is_some());
+        assert_eq!(state.current.as_ref().unwrap().temperature, 42.0);
+        assert!(!state.hourly.is_empty());
+        assert!(!state.daily.is_empty());
+        assert!(state.last_updated.is_some());
+    }
+
+    #[test]
+    fn test_weather_received_error() {
+        let mut state = AppState::default();
+        state.loading = true;
+
+        state.update(Message::WeatherReceived(Err(
+            "Network error".to_string(),
+        )));
+
+        assert!(!state.loading);
+        assert!(state.error.is_some());
+        assert_eq!(state.error.as_ref().unwrap(), "Network error");
+    }
+
+    #[test]
+    fn test_location_received_success() {
+        let mut state = AppState::default();
+        state.fetch_in_progress = true;
+
+        let loc = mock::mock_geocoding_result();
+        state.update(Message::LocationReceived(Ok(loc)));
+
+        assert!(!state.fetch_in_progress);
+        assert!(state.loading);
+        assert!(state.error.is_none());
+        assert_eq!(state.location.name, "New York, New York, United States");
+        assert_eq!(state.location.latitude, 40.7128);
+        assert_eq!(state.location.longitude, -74.0060);
+    }
+
+    #[test]
+    fn test_location_received_error() {
+        let mut state = AppState::default();
+        state.fetch_in_progress = true;
+
+        state.update(Message::LocationReceived(Err(
+            "No locations found".to_string(),
+        )));
+
+        assert!(!state.fetch_in_progress);
+        assert!(!state.loading);
+        assert!(state.error.is_some());
+        assert_eq!(state.error.as_ref().unwrap(), "No locations found");
+    }
+
+    #[test]
+    fn test_refresh_triggers_loading() {
+        let mut state = AppState::default();
+        assert!(!state.loading);
+
+        state.update(Message::Refresh);
+
+        assert!(state.loading);
+    }
+
+    #[test]
+    fn test_new_with_default_location() {
+        let mut config = AppConfig::default();
+        config.location.default = "Chicago".to_string();
+
+        let state = AppState::new(config);
+
+        assert_eq!(state.pending_search, Some("Chicago".to_string()));
+        assert_eq!(state.input_mode, InputMode::Normal);
+    }
+
+    #[test]
+    fn test_new_without_default_location() {
+        let config = AppConfig::default();
+        let state = AppState::new(config);
+
+        assert!(state.pending_search.is_none());
+        assert_eq!(state.input_mode, InputMode::Search);
     }
 }

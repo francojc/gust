@@ -1,9 +1,11 @@
-# gust Development Plan
+# `gust` Development Plan
+
+> A terminal-based weather dashboard that focuses on visual data density and high-resolution aesthetics.
 
 ## Project Status
 
 - [x] Stage 1: Project Setup & Architecture
-- [ ] Stage 2: Data Layer
+- [x] Stage 2: Data Layer
 - [ ] Stage 3: Static UI
 - [ ] Stage 4: Visualization
 - [ ] Stage 5: Interaction & Polish
@@ -26,12 +28,14 @@ Model (AppState) → Message (Events) → Update (State Transitions) → View (R
 
 ```
 src/
-├── main.rs           # Entry point, terminal setup
+├── main.rs           # Entry point, async runtime, fetch functions
 ├── app.rs            # AppState, Message, update(), view()
 ├── api/
 │   ├── mod.rs
 │   ├── client.rs     # Open-Meteo HTTP client
+│   ├── convert.rs    # API → domain type conversion
 │   ├── geocoding.rs  # Location search
+│   ├── mock.rs       # Mock data for testing
 │   └── types.rs      # API response structs
 ├── cache/
 │   ├── mod.rs
@@ -111,15 +115,19 @@ pub struct AppState {
     pub input_mode: InputMode,
     pub input_buffer: String,
     pub loading: bool,
+    pub fetch_in_progress: bool,
+    pub pending_search: Option<String>,
     pub error: Option<String>,
     pub last_updated: Option<DateTime<Utc>>,
     pub config: AppConfig,
+    pub should_quit: bool,
 }
 
 pub enum Message {
     Input(KeyEvent),
-    WeatherReceived(Result<WeatherData, Error>),
-    AlertsReceived(Result<Vec<WeatherAlert>, Error>),
+    WeatherReceived(Result<WeatherData, String>),
+    AlertsReceived(Result<Vec<WeatherAlert>, String>),
+    LocationReceived(Result<GeocodingResult, String>),
     Tick,
     Refresh,
     Quit,
@@ -144,12 +152,14 @@ pub enum InputMode {
 
 ### Tasks
 
-- [ ] Define API response structs with serde
-- [ ] Implement Open-Meteo client
-- [ ] Implement geocoding (location search)
-- [ ] Add caching layer (~/.cache/gust/)
-- [ ] Create mock data for testing
-- [ ] Unit tests for API client
+- [x] Define API response structs with serde
+- [x] Implement Open-Meteo client
+- [x] Implement geocoding (location search)
+- [x] Add caching layer (~/.cache/gust/)
+- [x] Integrate async data fetching with main loop
+- [x] Wire location search to geocoding API
+- [x] Create mock data for testing
+- [x] Unit tests for API client and conversions
 
 ### Open-Meteo API Endpoints
 
