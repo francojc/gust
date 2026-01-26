@@ -183,7 +183,11 @@ async fn fetch_location(query: &str) -> Result<GeocodingResult, String> {
             if let Some(first) = results.into_iter().next() {
                 Ok(first)
             } else {
-                Err(format!("No locations found for '{}'", query))
+                Err(format!(
+                    "No locations found for '{}'. Try using a hyphen for hyphenated \
+                     city names (e.g., Winston-Salem) or search by ZIP code.",
+                    query
+                ))
             }
         }
         Err(e) => Err(e.to_string()),

@@ -1,6 +1,6 @@
 //! Mock data for testing without network calls.
 
-use chrono::{TimeZone, Utc};
+use chrono::{NaiveDate, TimeDelta};
 
 use crate::api::types::{
     CurrentResponse, DailyResponse, ForecastResponse, GeocodingResult, HourlyResponse,
@@ -21,7 +21,10 @@ pub fn mock_forecast_response() -> ForecastResponse {
 /// Create a mock current weather response.
 pub fn mock_current() -> CurrentResponse {
     CurrentResponse {
-        time: Utc.with_ymd_and_hms(2024, 1, 15, 12, 0, 0).unwrap(),
+        time: NaiveDate::from_ymd_opt(2024, 1, 15)
+            .unwrap()
+            .and_hms_opt(12, 0, 0)
+            .unwrap(),
         temperature_2m: 42.0,
         apparent_temperature: 38.0,
         relative_humidity_2m: 65,
@@ -34,9 +37,12 @@ pub fn mock_current() -> CurrentResponse {
 
 /// Create a mock hourly forecast response.
 pub fn mock_hourly() -> HourlyResponse {
-    let base_time = Utc.with_ymd_and_hms(2024, 1, 15, 0, 0, 0).unwrap();
+    let base_time = NaiveDate::from_ymd_opt(2024, 1, 15)
+        .unwrap()
+        .and_hms_opt(0, 0, 0)
+        .unwrap();
     let hours: Vec<_> = (0..24)
-        .map(|h| base_time + chrono::Duration::hours(h))
+        .map(|h| base_time + TimeDelta::hours(h))
         .collect();
 
     HourlyResponse {
@@ -62,19 +68,22 @@ pub fn mock_hourly() -> HourlyResponse {
 
 /// Create a mock daily forecast response.
 pub fn mock_daily() -> DailyResponse {
-    let base_date = Utc.with_ymd_and_hms(2024, 1, 15, 0, 0, 0).unwrap();
+    let base_date = NaiveDate::from_ymd_opt(2024, 1, 15)
+        .unwrap()
+        .and_hms_opt(0, 0, 0)
+        .unwrap();
     let days: Vec<_> = (0..7)
-        .map(|d| base_date + chrono::Duration::days(d))
+        .map(|d| base_date + TimeDelta::days(d))
         .collect();
 
     let sunrises: Vec<_> = days
         .iter()
-        .map(|d| *d + chrono::Duration::hours(7) + chrono::Duration::minutes(15))
+        .map(|d| *d + TimeDelta::hours(7) + TimeDelta::minutes(15))
         .collect();
 
     let sunsets: Vec<_> = days
         .iter()
-        .map(|d| *d + chrono::Duration::hours(17) + chrono::Duration::minutes(30))
+        .map(|d| *d + TimeDelta::hours(17) + TimeDelta::minutes(30))
         .collect();
 
     DailyResponse {

@@ -1,6 +1,6 @@
 //! API response types for Open-Meteo.
 
-use chrono::{DateTime, Utc};
+use chrono::NaiveDateTime;
 use serde::{Deserialize, Serialize};
 
 /// Response from the Open-Meteo forecast API.
@@ -17,7 +17,7 @@ pub struct ForecastResponse {
 /// Current weather data from API.
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct CurrentResponse {
-    pub time: DateTime<Utc>,
+    pub time: NaiveDateTime,
     pub temperature_2m: f64,
     pub apparent_temperature: f64,
     pub relative_humidity_2m: u8,
@@ -30,7 +30,7 @@ pub struct CurrentResponse {
 /// Hourly forecast data from API.
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct HourlyResponse {
-    pub time: Vec<DateTime<Utc>>,
+    pub time: Vec<NaiveDateTime>,
     pub temperature_2m: Vec<f64>,
     pub precipitation_probability: Vec<u8>,
     pub relative_humidity_2m: Vec<u8>,
@@ -40,12 +40,12 @@ pub struct HourlyResponse {
 /// Daily forecast data from API.
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct DailyResponse {
-    pub time: Vec<DateTime<Utc>>,
+    pub time: Vec<NaiveDateTime>,
     pub temperature_2m_max: Vec<f64>,
     pub temperature_2m_min: Vec<f64>,
     pub precipitation_sum: Vec<f64>,
-    pub sunrise: Vec<DateTime<Utc>>,
-    pub sunset: Vec<DateTime<Utc>>,
+    pub sunrise: Vec<NaiveDateTime>,
+    pub sunset: Vec<NaiveDateTime>,
 }
 
 /// Response from the Open-Meteo geocoding API.
