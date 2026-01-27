@@ -11,6 +11,7 @@ mod ui;
 use std::io;
 use std::time::Duration;
 
+use clap::Parser;
 use color_eyre::Result;
 use crossterm::{
     event::{self, Event, KeyEventKind},
@@ -26,6 +27,15 @@ use app::{AppState, Message, WeatherData};
 use cache::Cache;
 use config::AppConfig;
 
+/// A terminal-based weather dashboard
+#[derive(Parser, Debug)]
+#[command(name = "gust")]
+#[command(version, about, long_about = None)]
+struct Cli {
+    /// Location to search for on startup (e.g., "New York, NY")
+    location: Option<String>,
+}
+
 /// Result type for fetch operations sent through channels.
 enum FetchResult {
     Weather(Result<WeatherData, String>),
@@ -34,6 +44,9 @@ enum FetchResult {
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    // Parse CLI arguments before anything else
+    let cli = Cli::parse();
+
     // Initialize error handling
     error::init()?;
 
@@ -44,7 +57,7 @@ async fn main() -> Result<()> {
     let mut terminal = setup_terminal()?;
 
     // Run the application
-    let result = run(&mut terminal, config).await;
+    let result = run(&mut terminal, config, cli.location).await;
 
     // Restore terminal state
     restore_terminal(&mut terminal)?;
@@ -68,8 +81,18 @@ fn restore_terminal(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> Re
     Ok(())
 }
 
-async fn run(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>, config: AppConfig) -> Result<()> {
+async fn run(
+    terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
+    config: AppConfig,
+    initial_location: Option<String>,
+) -> Result<()> {
     let mut state = AppState::new(config.clone());
+
+    // If a location was provided via CLI, queue it for search
+    if let Some(location) = initial_location {
+        state.pending_search = Some(location);
+    }
+
     let (tx, mut rx) = mpsc::channel::<FetchResult>(32);
 
     loop {
@@ -105,10 +128,14 @@ async fn run(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>, config: AppC
         tokio::select! {
             _ = sleep(Duration::from_millis(50)) => {
                 if event::poll(Duration::ZERO)? {
-                    if let Event::Key(key) = event::read()? {
-                        if key.kind == KeyEventKind::Press {
+                    match event::read()? {
+                        Event::Key(key) if key.kind == KeyEventKind::Press => {
                             state.update(Message::Input(key));
                         }
+                        Event::Resize(_, _) => {
+                            // Terminal resize - ratatui will redraw on next frame
+                        }
+                        _ => {}
                     }
                 }
             }

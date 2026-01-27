@@ -123,6 +123,7 @@ pub struct AppState {
     pub pending_search: Option<String>,
     pub error: Option<String>,
     pub last_updated: Option<DateTime<Utc>>,
+    pub timezone: Option<String>,
     pub config: AppConfig,
     pub should_quit: bool,
 }
@@ -152,6 +153,7 @@ pub struct WeatherData {
     pub current: CurrentWeather,
     pub hourly: Vec<HourlyForecast>,
     pub daily: Vec<DailyForecast>,
+    pub timezone: String,
 }
 
 impl AppState {
@@ -238,6 +240,7 @@ impl AppState {
                 self.current = Some(data.current);
                 self.hourly = data.hourly;
                 self.daily = data.daily;
+                self.timezone = Some(data.timezone);
                 self.last_updated = Some(Utc::now());
                 self.error = None;
             }
@@ -331,17 +334,18 @@ impl AppState {
         self.render_tabs(frame, chunks[0], theme);
 
         // Render selected content
+        let tz = self.timezone.as_deref();
         match self.selected_tab {
             Tab::Temperature => {
-                let data = TemperatureData::from_hourly(&self.hourly);
+                let data = TemperatureData::from_hourly(&self.hourly, tz);
                 temperature::render(&data, theme, frame, chunks[1]);
             }
             Tab::Precipitation => {
-                let data = PrecipitationData::from_hourly(&self.hourly);
+                let data = PrecipitationData::from_hourly(&self.hourly, tz);
                 precipitation::render(&data, theme, frame, chunks[1]);
             }
             Tab::Humidity => {
-                let data = HumidityData::from_hourly(&self.hourly);
+                let data = HumidityData::from_hourly(&self.hourly, tz);
                 humidity::render(&data, theme, frame, chunks[1]);
             }
             Tab::Alerts => {

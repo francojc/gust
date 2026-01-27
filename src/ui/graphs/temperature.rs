@@ -8,7 +8,7 @@ use ratatui::{
     Frame,
 };
 
-use super::{calculate_bounds, create_time_labels, x_position};
+use super::{calculate_bounds, create_time_labels_with_dates, get_day_boundary_positions, x_position};
 use crate::app::HourlyForecast;
 use crate::ui::theme::Theme;
 
@@ -23,11 +23,13 @@ pub struct TemperatureData {
     pub x_labels: Vec<String>,
     /// Y-axis labels.
     pub y_labels: Vec<String>,
+    /// X-positions of day boundaries for rendering separator lines.
+    pub day_boundaries: Vec<f64>,
 }
 
 impl TemperatureData {
     /// Create temperature data from hourly forecast.
-    pub fn from_hourly(hourly: &[HourlyForecast]) -> Self {
+    pub fn from_hourly(hourly: &[HourlyForecast], timezone: Option<&str>) -> Self {
         if hourly.is_empty() {
             return Self::empty();
         }
@@ -41,18 +43,16 @@ impl TemperatureData {
             .map(|(i, h)| (x_position(i, hourly.len()), h.temperature))
             .collect();
 
-        let x_labels: Vec<String> = create_time_labels(hourly)
-            .iter()
-            .map(|s| s.content.to_string())
-            .collect();
-
+        let x_labels = create_time_labels_with_dates(hourly, timezone);
         let y_labels = Self::create_y_labels(y_bounds);
+        let day_boundaries = get_day_boundary_positions(hourly);
 
         Self {
             points,
             y_bounds,
             x_labels,
             y_labels,
+            day_boundaries,
         }
     }
 
@@ -63,6 +63,7 @@ impl TemperatureData {
             y_bounds: [0.0, 100.0],
             x_labels: vec![],
             y_labels: vec!["0".to_string(), "50".to_string(), "100".to_string()],
+            day_boundaries: vec![],
         }
     }
 
@@ -87,14 +88,35 @@ pub fn render(data: &TemperatureData, theme: &Theme, frame: &mut Frame, area: Re
         return;
     }
 
-    let dataset = Dataset::default()
-        .name("Temperature")
-        .marker(Marker::Braille)
-        .graph_type(GraphType::Line)
-        .style(Style::default().fg(theme.accent))
-        .data(&data.points);
-
     let x_bounds = [0.0, (data.points.len() - 1).max(1) as f64];
+    let y_min = data.y_bounds[0];
+    let y_max = data.y_bounds[1];
+
+    // Create datasets: main temperature line + day boundary separators
+    let mut datasets = Vec::new();
+
+    // Add day boundary separator lines first (so they render behind the data)
+    let separator_style = Style::default().fg(theme.muted);
+    for &x in &data.day_boundaries {
+        let separator_data: Vec<(f64, f64)> = vec![(x, y_min), (x, y_max)];
+        datasets.push(
+            Dataset::default()
+                .marker(Marker::Braille)
+                .graph_type(GraphType::Line)
+                .style(separator_style)
+                .data(separator_data.leak()),
+        );
+    }
+
+    // Add main temperature line
+    datasets.push(
+        Dataset::default()
+            .name("Temperature")
+            .marker(Marker::Braille)
+            .graph_type(GraphType::Line)
+            .style(Style::default().fg(theme.accent))
+            .data(&data.points),
+    );
 
     let x_labels: Vec<ratatui::text::Span> = data
         .x_labels
@@ -108,7 +130,7 @@ pub fn render(data: &TemperatureData, theme: &Theme, frame: &mut Frame, area: Re
         .map(|s| ratatui::text::Span::raw(s.clone()))
         .collect();
 
-    let chart = Chart::new(vec![dataset])
+    let chart = Chart::new(datasets)
         .block(
             Block::default()
                 .borders(Borders::ALL)
@@ -194,7 +216,7 @@ mod tests {
     #[test]
     fn test_temperature_graph_renders() {
         let hourly = create_mock_hourly();
-        let data = TemperatureData::from_hourly(&hourly);
+        let data = TemperatureData::from_hourly(&hourly, None);
         let theme = Theme::dark();
         let output = render_to_string(&data, &theme);
         assert_snapshot!(output);
@@ -211,7 +233,7 @@ mod tests {
     #[test]
     fn test_temperature_data_from_hourly() {
         let hourly = create_mock_hourly();
-        let data = TemperatureData::from_hourly(&hourly);
+        let data = TemperatureData::from_hourly(&hourly, None);
 
         assert_eq!(data.points.len(), 24);
         assert!(data.y_bounds[0] < 32.0);
@@ -221,7 +243,7 @@ mod tests {
     #[test]
     fn test_temperature_data_empty() {
         let hourly: Vec<HourlyForecast> = vec![];
-        let data = TemperatureData::from_hourly(&hourly);
+        let data = TemperatureData::from_hourly(&hourly, None);
 
         assert!(data.points.is_empty());
         assert_eq!(data.y_bounds, [0.0, 100.0]);

@@ -8,7 +8,7 @@ use ratatui::{
     Frame,
 };
 
-use super::{create_time_labels, x_position};
+use super::{create_time_labels_with_dates, get_day_boundary_positions, x_position};
 use crate::app::HourlyForecast;
 use crate::ui::theme::Theme;
 
@@ -19,11 +19,13 @@ pub struct PrecipitationData {
     pub points: Vec<(f64, f64)>,
     /// X-axis labels.
     pub x_labels: Vec<String>,
+    /// X-positions of day boundaries for rendering separator lines.
+    pub day_boundaries: Vec<f64>,
 }
 
 impl PrecipitationData {
     /// Create precipitation data from hourly forecast.
-    pub fn from_hourly(hourly: &[HourlyForecast]) -> Self {
+    pub fn from_hourly(hourly: &[HourlyForecast], timezone: Option<&str>) -> Self {
         if hourly.is_empty() {
             return Self::empty();
         }
@@ -34,12 +36,14 @@ impl PrecipitationData {
             .map(|(i, h)| (x_position(i, hourly.len()), h.precipitation_probability as f64))
             .collect();
 
-        let x_labels: Vec<String> = create_time_labels(hourly)
-            .iter()
-            .map(|s| s.content.to_string())
-            .collect();
+        let x_labels = create_time_labels_with_dates(hourly, timezone);
+        let day_boundaries = get_day_boundary_positions(hourly);
 
-        Self { points, x_labels }
+        Self {
+            points,
+            x_labels,
+            day_boundaries,
+        }
     }
 
     /// Create empty precipitation data.
@@ -47,6 +51,7 @@ impl PrecipitationData {
         Self {
             points: vec![],
             x_labels: vec![],
+            day_boundaries: vec![],
         }
     }
 }
@@ -58,15 +63,35 @@ pub fn render(data: &PrecipitationData, theme: &Theme, frame: &mut Frame, area: 
         return;
     }
 
-    // Use Bar graph type with wider markers to simulate bars
-    let dataset = Dataset::default()
-        .name("Precipitation %")
-        .marker(Marker::Block)
-        .graph_type(GraphType::Scatter)
-        .style(Style::default().fg(ratatui::style::Color::Blue))
-        .data(&data.points);
-
     let x_bounds = [0.0, (data.points.len() - 1).max(1) as f64];
+    let y_min = 0.0;
+    let y_max = 100.0;
+
+    // Create datasets: main precipitation scatter + day boundary separators
+    let mut datasets = Vec::new();
+
+    // Add day boundary separator lines first (so they render behind the data)
+    let separator_style = Style::default().fg(theme.muted);
+    for &x in &data.day_boundaries {
+        let separator_data: Vec<(f64, f64)> = vec![(x, y_min), (x, y_max)];
+        datasets.push(
+            Dataset::default()
+                .marker(Marker::Braille)
+                .graph_type(GraphType::Line)
+                .style(separator_style)
+                .data(separator_data.leak()),
+        );
+    }
+
+    // Add main precipitation scatter
+    datasets.push(
+        Dataset::default()
+            .name("Precipitation %")
+            .marker(Marker::Block)
+            .graph_type(GraphType::Scatter)
+            .style(Style::default().fg(ratatui::style::Color::Blue))
+            .data(&data.points),
+    );
 
     let x_labels: Vec<ratatui::text::Span> = data
         .x_labels
@@ -80,7 +105,7 @@ pub fn render(data: &PrecipitationData, theme: &Theme, frame: &mut Frame, area: 
         ratatui::text::Span::raw("100"),
     ];
 
-    let chart = Chart::new(vec![dataset])
+    let chart = Chart::new(datasets)
         .block(
             Block::default()
                 .borders(Borders::ALL)
@@ -98,7 +123,7 @@ pub fn render(data: &PrecipitationData, theme: &Theme, frame: &mut Frame, area: 
             Axis::default()
                 .title("%")
                 .style(Style::default().fg(theme.muted))
-                .bounds([0.0, 100.0])
+                .bounds([y_min, y_max])
                 .labels(y_labels),
         );
 
@@ -166,7 +191,7 @@ mod tests {
     #[test]
     fn test_precipitation_graph_renders() {
         let hourly = create_mock_hourly();
-        let data = PrecipitationData::from_hourly(&hourly);
+        let data = PrecipitationData::from_hourly(&hourly, None);
         let theme = Theme::dark();
         let output = render_to_string(&data, &theme);
         assert_snapshot!(output);
@@ -183,7 +208,7 @@ mod tests {
     #[test]
     fn test_precipitation_data_from_hourly() {
         let hourly = create_mock_hourly();
-        let data = PrecipitationData::from_hourly(&hourly);
+        let data = PrecipitationData::from_hourly(&hourly, None);
 
         assert_eq!(data.points.len(), 24);
         assert_eq!(data.points[0].1, 0.0);

@@ -45,11 +45,12 @@ gust --help
 | `1` | Temperature graph |
 | `2` | Precipitation graph |
 | `3` | Humidity graph |
+| `4` | Alerts view |
 | `/` | Search location |
 | `r` | Refresh data |
 | `q` | Quit |
-| `←/→` | Pan timeline |
 | `Tab` | Cycle views |
+| `Esc` | Cancel search |
 
 ## Configuration
 

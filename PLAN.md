@@ -7,8 +7,8 @@
 - [x] Stage 1: Project Setup & Architecture
 - [x] Stage 2: Data Layer
 - [x] Stage 3: Static UI
-- [ ] Stage 4: Visualization
-- [ ] Stage 5: Interaction & Polish
+- [x] Stage 4: Visualization (graphs complete, resize/fallback deferred)
+- [ ] Stage 5: Interaction & Polish (partial - search, themes, time format done)
 - [ ] Stage 6: Extended Features
 - [ ] Stage 7: Release Preparation
 
@@ -368,13 +368,13 @@ The UI is fully functional with extracted widget modules:
 
 ### Tasks
 
-- [ ] Implement Canvas-based temperature graph
-- [ ] Add precipitation bar chart
-- [ ] Add humidity area chart
-- [ ] Implement tab switching logic
-- [ ] Add axis labels and legends
-- [ ] Handle terminal resize events
-- [ ] Fallback rendering for limited terminals
+- [x] Implement Canvas-based temperature graph
+- [x] Add precipitation bar chart
+- [x] Add humidity area chart
+- [x] Implement tab switching logic
+- [x] Add axis labels and legends
+- [x] Handle terminal resize events
+- [ ] Fallback rendering for limited terminals (deferred)
 
 ### Graph Specifications
 
@@ -405,13 +405,13 @@ The UI is fully functional with extracted widget modules:
 
 ### Tasks
 
-- [ ] Implement command mode (/ to search)
-- [ ] Add loading states and spinners
-- [ ] Error display in UI
+- [x] Implement command mode (/ to search)
+- [x] Add loading states and spinners
+- [x] Error display in UI
 - [ ] Mouse support (click to select)
-- [ ] Theme system (dark, light, solarized, nord)
-- [ ] Timeline panning (←/→ arrows)
-- [ ] 12h/24h time format toggle
+- [x] Theme system (dark, light, solarized, nord)
+- [ ] Timeline panning (←/→ arrows) (deferred)
+- [x] 12h/24h time format toggle
 
 ### Async Event Loop
 

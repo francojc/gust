@@ -9,6 +9,7 @@ pub fn forecast_to_weather_data(resp: ForecastResponse) -> WeatherData {
         current: resp.current.map(convert_current).unwrap_or_default(),
         hourly: resp.hourly.map(convert_hourly).unwrap_or_default(),
         daily: resp.daily.map(convert_daily).unwrap_or_default(),
+        timezone: resp.timezone,
     }
 }
 

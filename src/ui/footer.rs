@@ -9,6 +9,7 @@ use ratatui::{
     Frame,
 };
 
+use super::graphs::format_local_time;
 use super::theme::Theme;
 use crate::app::{AppState, InputMode};
 
@@ -20,6 +21,8 @@ pub struct FooterData {
     pub loading: bool,
     pub error: Option<String>,
     pub last_updated: Option<DateTime<Utc>>,
+    pub timezone: Option<String>,
+    pub time_format: String,
 }
 
 impl FooterData {
@@ -31,6 +34,8 @@ impl FooterData {
             loading: state.loading,
             error: state.error.clone(),
             last_updated: state.last_updated,
+            timezone: state.timezone.clone(),
+            time_format: state.config.display.time_format.clone(),
         }
     }
 }
@@ -76,9 +81,10 @@ fn build_status_line(data: &FooterData, theme: &Theme) -> Line<'static> {
             Style::default().fg(theme.error),
         ))
     } else {
+        let use_24h = data.time_format == "24h";
         let updated = data.last_updated.map_or_else(
             || "Never".to_string(),
-            |t| t.format("%I:%M %p").to_string(),
+            |t| format_local_time(t, data.timezone.as_deref(), use_24h),
         );
         Line::from(format!(
             "Updated: {} | q:quit r:refresh /:search",
