@@ -148,7 +148,7 @@ pub enum InputMode {
 
 ---
 
-## Stage 2: Data Layer
+## Stage 2: Data Layer (Complete)
 
 ### Tasks
 
@@ -161,39 +161,125 @@ pub enum InputMode {
 - [x] Create mock data for testing
 - [x] Unit tests for API client and conversions
 
-### Open-Meteo API Endpoints
+### Implementation Details
 
-**Weather Forecast:**
+#### Open-Meteo Weather Forecast API
+
+**Endpoint:** `https://api.open-meteo.com/v1/forecast`
+
+**Query Parameters:**
+
+| Parameter | Value |
+|-----------|-------|
+| `latitude` | Location latitude |
+| `longitude` | Location longitude |
+| `current` | `temperature_2m,apparent_temperature,relative_humidity_2m,wind_speed_10m,wind_direction_10m,surface_pressure,weather_code` |
+| `hourly` | `temperature_2m,precipitation_probability,relative_humidity_2m,wind_speed_10m` |
+| `daily` | `temperature_2m_max,temperature_2m_min,precipitation_sum,sunrise,sunset` |
+| `temperature_unit` | `fahrenheit` or `celsius` (from config) |
+| `wind_speed_unit` | `mph` or `kmh` (from config) |
+| `precipitation_unit` | `inch` or `mm` (from config) |
+| `timezone` | `auto` |
+
+**Response Format (note: no seconds in timestamps):**
+
+```json
+{
+  "latitude": 40.7128,
+  "longitude": -74.006,
+  "timezone": "America/New_York",
+  "current": {
+    "time": "2026-01-27T10:30",
+    "temperature_2m": 42.0,
+    "apparent_temperature": 38.0,
+    "relative_humidity_2m": 65,
+    "wind_speed_10m": 12.0,
+    "wind_direction_10m": 225.0,
+    "surface_pressure": 1020.5,
+    "weather_code": 2
+  },
+  "hourly": { ... },
+  "daily": { ... }
+}
+```
+
+**Custom Serde Deserializers (src/api/types.rs):**
+
+- `datetime_no_seconds` - Handles `%Y-%m-%dT%H:%M` format for single NaiveDateTime fields
+- `datetime_no_seconds_vec` - Handles arrays of datetimes without seconds
+
+#### Open-Meteo Geocoding API
+
+**Endpoint:** `https://geocoding-api.open-meteo.com/v1/search`
+
+**Query Parameters:**
+
+| Parameter | Value |
+|-----------|-------|
+| `name` | URL-encoded location query |
+| `count` | `5` (max results) |
+| `language` | `en` |
+| `format` | `json` |
+
+**Response Format:**
+
+```json
+{
+  "results": [
+    {
+      "id": 5128581,
+      "name": "New York",
+      "latitude": 40.7128,
+      "longitude": -74.006,
+      "country": "United States",
+      "admin1": "New York"
+    }
+  ]
+}
+```
+
+#### Data Flow Architecture
 
 ```
-https://api.open-meteo.com/v1/forecast
-  ?latitude={lat}
-  &longitude={lon}
-  &hourly=temperature_2m,precipitation_probability,relative_humidity_2m,wind_speed_10m
-  &daily=temperature_2m_max,temperature_2m_min,precipitation_sum,sunrise,sunset
-  &temperature_unit=fahrenheit
-  &wind_speed_unit=mph
-  &precipitation_unit=inch
-  &timezone=auto
+User Search → pending_search → fetch_location() → GeocodingResult
+                                                        ↓
+                                              Location updated, loading=true
+                                                        ↓
+                                              fetch_weather(lat, lon)
+                                                        ↓
+                                           Cache check (TTL-based)
+                                           ↓ miss         ↓ hit
+                                      API request    Return cached
+                                           ↓
+                                      Cache response
+                                           ↓
+                                      WeatherData → AppState updated → UI re-render
 ```
 
-**Geocoding:**
+#### Caching Implementation (src/cache/storage.rs)
 
-```
-https://geocoding-api.open-meteo.com/v1/search
-  ?name={city}
-  &count=5
-  &language=en
-  &format=json
-```
+- **Location:** Platform-specific cache directory + `/gust/`
+  - macOS: `~/Library/Caches/gust/`
+  - Linux: `~/.cache/gust/`
+  - Windows: `%LOCALAPPDATA%/gust/`
+- **Cache key:** `{latitude}_{longitude}.json`
+- **TTL validation:** File modification time vs current time
+- **Offline fallback:** `get_stale()` returns expired cache when API fails
+- **Default TTL:** 30 minutes (configurable via `cache_duration`)
 
-### Caching Strategy
+#### Domain Type Conversions (src/api/convert.rs)
 
-- Cache location: `~/.cache/gust/`
-- Cache key: `{lat}_{lon}.json`
-- Include timestamp in cached file
-- Serve stale data with visual indicator when offline
-- Default TTL: 30 minutes (configurable)
+- `forecast_to_weather_data()` - Main conversion function
+- `degrees_to_direction()` - Converts wind degrees (0-360) to 16-point compass (N, NNE, NE...)
+- `weather_code_to_description()` - Maps WMO codes to descriptions (0=Clear, 1-3=Clouds, 45/48=Fog, etc.)
+
+#### Mock Data (src/api/mock.rs)
+
+- `mock_forecast_response()` - Full forecast for New York, Jan 15, 2024
+- `mock_current()` - 42°F, feels like 38°F, partly cloudy
+- `mock_hourly()` - 24 hours of data (35°F-48°F range)
+- `mock_daily()` - 7 days of data with sunrise/sunset
+- `mock_geocoding_result()` - New York City coordinates
 
 ---
 
@@ -201,13 +287,34 @@ https://geocoding-api.open-meteo.com/v1/search
 
 ### Tasks
 
-- [ ] Build responsive layout system
-- [ ] Implement Header widget (current conditions)
-- [ ] Implement Footer widget (status bar, input)
-- [ ] Set up crossterm event loop
-- [ ] Add basic key bindings (q, r, /, 1-3)
-- [ ] Implement terminal size detection
+- [x] Build responsive layout system (20/60/20 vertical split)
+- [x] Implement Header widget (current conditions)
+- [x] Implement Footer widget (status bar, input)
+- [x] Set up crossterm event loop
+- [x] Add basic key bindings (q, r, /, 1-4, Tab)
+- [ ] Extract widgets to ui/ modules (currently inline in app.rs)
+- [ ] Add weather icon/emoji based on weather_code
+- [ ] Implement minimum terminal size detection
 - [ ] Snapshot tests for widgets
+
+### Current State
+
+The basic UI is functional in `src/app.rs`:
+
+- **Header:** Shows location name, temperature, feels-like, wind speed/direction, pressure
+- **Main view:** Tab bar with placeholders for graphs (1:Temp, 2:Precip, 3:Humidity, 4:Alerts)
+- **Footer:** Input prompt (search mode), status line (loading/error/last updated)
+- **Key bindings:** q=quit, r=refresh, /=search, 1-4=tabs, Tab=cycle tabs, Esc=cancel search
+
+**Files needing implementation:**
+
+| File | Status | Purpose |
+|------|--------|---------|
+| `src/ui/layout.rs` | Done | ScreenLayout struct with 20/60/20 split |
+| `src/ui/header.rs` | Stub | Extract render_header() from app.rs |
+| `src/ui/footer.rs` | Stub | Extract render_footer() from app.rs |
+| `src/ui/theme.rs` | Stub | Color scheme definitions |
+| `src/ui/graphs/*.rs` | Stub | Graph widgets (Stage 4) |
 
 ### Layout Structure
 
@@ -221,7 +328,7 @@ https://geocoding-api.open-meteo.com/v1/search
 ├─────────────────────────────────────────────────┤
 │ Main View (60%)                                 │
 │ ┌─────────────────────────────────────────────┐ │
-│ │ [1:Temp] [2:Precip] [3:Humidity]            │ │
+│ │ [1:Temp] [2:Precip] [3:Humidity] [4:Alerts] │ │
 │ │                                              │ │
 │ │         ╭───╮                                │ │
 │ │     ╭───╯   ╰───╮         ╭───╮             │ │
@@ -233,10 +340,33 @@ https://geocoding-api.open-meteo.com/v1/search
 │ Footer (20%)                                    │
 │ ┌─────────────────────────────────────────────┐ │
 │ │ > _                                          │ │
-│ │ Source: ECMWF | Updated: 2:30 PM | q:quit   │ │
+│ │ Updated: 2:30 PM | q:quit r:refresh /:search│ │
 │ └─────────────────────────────────────────────┘ │
 └─────────────────────────────────────────────────┘
 ```
+
+### Remaining Stage 3 Work
+
+1. **Extract header.rs:** Move `render_header()` to dedicated module
+   - Add weather icon mapping (weather_code → emoji/symbol)
+   - Add description text from weather_code
+
+2. **Extract footer.rs:** Move `render_footer()` to dedicated module
+   - Consider showing unit system in status bar
+
+3. **Implement theme.rs:** Define color schemes
+   - Dark theme (current implicit defaults)
+   - Light theme variant
+   - Color constants for consistent styling
+
+4. **Terminal size handling:**
+   - Detect minimum size (e.g., 80x24)
+   - Show warning if terminal too small
+   - Graceful degradation for narrow terminals
+
+5. **Widget tests:**
+   - Use ratatui's TestBackend for snapshot testing
+   - Test with mock AppState data
 
 ---
 
