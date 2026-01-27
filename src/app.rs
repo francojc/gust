@@ -19,6 +19,12 @@ use crate::api::GeocodingResult;
 use crate::config::AppConfig;
 use crate::ui::{
     footer::{self, FooterData},
+    graphs::{
+        alerts::{self, AlertsData},
+        humidity::{self, HumidityData},
+        precipitation::{self, PrecipitationData},
+        temperature::{self, TemperatureData},
+    },
     header::{self, HeaderData},
     layout::{render_size_warning, ScreenLayout, SizeValidation},
     theme::Theme,
@@ -313,6 +319,39 @@ impl AppState {
     }
 
     fn render_main(&self, frame: &mut Frame, area: Rect, theme: &Theme) {
+        use ratatui::layout::{Constraint, Direction, Layout};
+
+        // Split area: tabs row (3 lines) + content area
+        let chunks = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([Constraint::Length(3), Constraint::Min(0)])
+            .split(area);
+
+        // Render tab bar
+        self.render_tabs(frame, chunks[0], theme);
+
+        // Render selected content
+        match self.selected_tab {
+            Tab::Temperature => {
+                let data = TemperatureData::from_hourly(&self.hourly);
+                temperature::render(&data, theme, frame, chunks[1]);
+            }
+            Tab::Precipitation => {
+                let data = PrecipitationData::from_hourly(&self.hourly);
+                precipitation::render(&data, theme, frame, chunks[1]);
+            }
+            Tab::Humidity => {
+                let data = HumidityData::from_hourly(&self.hourly);
+                humidity::render(&data, theme, frame, chunks[1]);
+            }
+            Tab::Alerts => {
+                let data = AlertsData::from_state(self);
+                alerts::render(&data, theme, frame, chunks[1]);
+            }
+        }
+    }
+
+    fn render_tabs(&self, frame: &mut Frame, area: Rect, theme: &Theme) {
         let tab_titles = ["1:Temp", "2:Precip", "3:Humidity", "4:Alerts"];
         let selected = match self.selected_tab {
             Tab::Temperature => 0,
@@ -333,18 +372,7 @@ impl AppState {
             })
             .collect();
 
-        let content = match self.selected_tab {
-            Tab::Temperature => "Temperature graph will be rendered here",
-            Tab::Precipitation => "Precipitation graph will be rendered here",
-            Tab::Humidity => "Humidity graph will be rendered here",
-            Tab::Alerts => "Weather alerts will be displayed here",
-        };
-
-        let text = vec![
-            Line::from(tabs),
-            Line::from(""),
-            Line::from(content),
-        ];
+        let text = vec![Line::from(tabs)];
 
         let block = Block::default()
             .borders(Borders::ALL)

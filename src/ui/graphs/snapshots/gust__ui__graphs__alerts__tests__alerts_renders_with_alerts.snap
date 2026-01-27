@@ -1,0 +1,24 @@
+---
+source: src/ui/graphs/alerts.rs
+expression: output
+---
+┌ Weather Alerts (3) ──────────────────────────────────────────────────────────┐
+│[WARNING] Winter Storm Warning                                                │
+│Heavy snow expected. 8-12 inches accumulation possible.                       │
+│Expires: Jan 02 18:00                                                         │
+│                                                                              │
+│[WATCH] Wind Advisory                                                         │
+│Gusty winds up to 45 mph expected.                                            │
+│Expires: Jan 02 12:00                                                         │
+│                                                                              │
+│[ADVISORY] Frost Advisory                                                     │
+│Sub-freezing temperatures expected overnight.                                 │
+│Expires: Jan 02 08:00                                                         │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+└──────────────────────────────────────────────────────────────────────────────┘

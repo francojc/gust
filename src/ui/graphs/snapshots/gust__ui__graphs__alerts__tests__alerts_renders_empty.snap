@@ -1,0 +1,24 @@
+---
+source: src/ui/graphs/alerts.rs
+expression: output
+---
+┌ Weather Alerts ──────────────────────────────────────────────────────────────┐
+│                                                                              │
+│No active alerts                                                              │
+│                                                                              │
+│Weather conditions are normal for your area.                                  │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+└──────────────────────────────────────────────────────────────────────────────┘
