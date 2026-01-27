@@ -6,7 +6,7 @@
 
 - [x] Stage 1: Project Setup & Architecture
 - [x] Stage 2: Data Layer
-- [ ] Stage 3: Static UI
+- [x] Stage 3: Static UI
 - [ ] Stage 4: Visualization
 - [ ] Stage 5: Interaction & Polish
 - [ ] Stage 6: Extended Features
@@ -283,7 +283,7 @@ User Search → pending_search → fetch_location() → GeocodingResult
 
 ---
 
-## Stage 3: Static UI
+## Stage 3: Static UI (Complete)
 
 ### Tasks
 
@@ -292,28 +292,29 @@ User Search → pending_search → fetch_location() → GeocodingResult
 - [x] Implement Footer widget (status bar, input)
 - [x] Set up crossterm event loop
 - [x] Add basic key bindings (q, r, /, 1-4, Tab)
-- [ ] Extract widgets to ui/ modules (currently inline in app.rs)
-- [ ] Add weather icon/emoji based on weather_code
-- [ ] Implement minimum terminal size detection
-- [ ] Snapshot tests for widgets
+- [x] Extract widgets to ui/ modules
+- [x] Add weather icon/emoji based on weather_code
+- [x] Implement minimum terminal size detection
+- [x] Snapshot tests for widgets
 
-### Current State
+### Implementation Summary
 
-The basic UI is functional in `src/app.rs`:
+The UI is fully functional with extracted widget modules:
 
-- **Header:** Shows location name, temperature, feels-like, wind speed/direction, pressure
+- **Header:** Shows location name, weather icon (emoji), temperature, feels-like, wind speed/direction, pressure
 - **Main view:** Tab bar with placeholders for graphs (1:Temp, 2:Precip, 3:Humidity, 4:Alerts)
 - **Footer:** Input prompt (search mode), status line (loading/error/last updated)
 - **Key bindings:** q=quit, r=refresh, /=search, 1-4=tabs, Tab=cycle tabs, Esc=cancel search
+- **Terminal size detection:** Shows warning when terminal is smaller than 80x24
 
-**Files needing implementation:**
+**Implemented files:**
 
 | File | Status | Purpose |
 |------|--------|---------|
-| `src/ui/layout.rs` | Done | ScreenLayout struct with 20/60/20 split |
-| `src/ui/header.rs` | Stub | Extract render_header() from app.rs |
-| `src/ui/footer.rs` | Stub | Extract render_footer() from app.rs |
-| `src/ui/theme.rs` | Stub | Color scheme definitions |
+| `src/ui/layout.rs` | Done | ScreenLayout, size validation, MIN_WIDTH/MIN_HEIGHT constants |
+| `src/ui/header.rs` | Done | HeaderData, weather_code_to_icon(), render() |
+| `src/ui/footer.rs` | Done | FooterData, render() |
+| `src/ui/theme.rs` | Done | Theme struct with dark/light/solarized/nord variants |
 | `src/ui/graphs/*.rs` | Stub | Graph widgets (Stage 4) |
 
 ### Layout Structure
@@ -345,28 +346,21 @@ The basic UI is functional in `src/app.rs`:
 └─────────────────────────────────────────────────┘
 ```
 
-### Remaining Stage 3 Work
+### Weather Icon Mapping (WMO codes)
 
-1. **Extract header.rs:** Move `render_header()` to dedicated module
-   - Add weather icon mapping (weather_code → emoji/symbol)
-   - Add description text from weather_code
-
-2. **Extract footer.rs:** Move `render_footer()` to dedicated module
-   - Consider showing unit system in status bar
-
-3. **Implement theme.rs:** Define color schemes
-   - Dark theme (current implicit defaults)
-   - Light theme variant
-   - Color constants for consistent styling
-
-4. **Terminal size handling:**
-   - Detect minimum size (e.g., 80x24)
-   - Show warning if terminal too small
-   - Graceful degradation for narrow terminals
-
-5. **Widget tests:**
-   - Use ratatui's TestBackend for snapshot testing
-   - Test with mock AppState data
+| Code | Icon | Description |
+|------|------|-------------|
+| 0 | ☀️ | Clear sky |
+| 1 | 🌤️ | Mainly clear |
+| 2 | ⛅ | Partly cloudy |
+| 3 | ☁️ | Overcast |
+| 45, 48 | 🌫️ | Fog |
+| 51-57 | 🌧️ | Drizzle |
+| 61-67 | 🌧️ | Rain |
+| 71-77 | 🌨️ | Snow |
+| 80-82 | 🌧️ | Rain showers |
+| 85-86 | 🌨️ | Snow showers |
+| 95-99 | ⛈️ | Thunderstorm |
 
 ---
 

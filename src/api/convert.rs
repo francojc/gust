@@ -22,6 +22,7 @@ fn convert_current(c: CurrentResponse) -> CurrentWeather {
         wind_direction: degrees_to_direction(c.wind_direction_10m),
         pressure: c.surface_pressure,
         description: weather_code_to_description(c.weather_code),
+        weather_code: c.weather_code,
     }
 }
 

@@ -1,0 +1,10 @@
+---
+source: src/ui/footer.rs
+expression: output
+---
+┌ Status ──────────────────────────────────────────────────────────────────────┐
+│Press '/' to search, 'q' to quit                                              │
+│                                                                              │
+│Network error: connection refused                                             │
+│                                                                              │
+└──────────────────────────────────────────────────────────────────────────────┘

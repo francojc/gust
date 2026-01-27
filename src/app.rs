@@ -8,8 +8,8 @@
 use chrono::{DateTime, NaiveDate, NaiveDateTime, Utc};
 use crossterm::event::KeyEvent;
 use ratatui::{
-    layout::{Constraint, Direction, Layout, Rect},
-    style::{Color, Style},
+    layout::Rect,
+    style::Style,
     text::{Line, Span},
     widgets::{Block, Borders, Paragraph},
     Frame,
@@ -17,6 +17,12 @@ use ratatui::{
 
 use crate::api::GeocodingResult;
 use crate::config::AppConfig;
+use crate::ui::{
+    footer::{self, FooterData},
+    header::{self, HeaderData},
+    layout::{render_size_warning, ScreenLayout, SizeValidation},
+    theme::Theme,
+};
 
 /// Location data.
 #[derive(Debug, Clone, Default)]
@@ -36,6 +42,7 @@ pub struct CurrentWeather {
     pub wind_direction: String,
     pub pressure: f64,
     pub description: String,
+    pub weather_code: u8,
 }
 
 /// Hourly forecast data point.
@@ -284,61 +291,28 @@ impl AppState {
 
     /// Render the application UI.
     pub fn view(&self, frame: &mut Frame) {
-        let chunks = Layout::default()
-            .direction(Direction::Vertical)
-            .constraints([
-                Constraint::Percentage(20),
-                Constraint::Percentage(60),
-                Constraint::Percentage(20),
-            ])
-            .split(frame.area());
+        let area = frame.area();
+        let theme = Theme::from_name(&self.config.display.theme);
 
-        self.render_header(frame, chunks[0]);
-        self.render_main(frame, chunks[1]);
-        self.render_footer(frame, chunks[2]);
+        // Check terminal size
+        if let SizeValidation::TooSmall { .. } = ScreenLayout::validate_size(area) {
+            render_size_warning(frame, area, &theme);
+            return;
+        }
+
+        let layout = ScreenLayout::new(area);
+
+        self.render_header(frame, layout.header, &theme);
+        self.render_main(frame, layout.main, &theme);
+        self.render_footer(frame, layout.footer, &theme);
     }
 
-    fn render_header(&self, frame: &mut Frame, area: Rect) {
-        let location_name = if self.location.name.is_empty() {
-            "No location selected"
-        } else {
-            &self.location.name
-        };
-
-        let temp_str = self.current.as_ref().map_or_else(
-            || "--°".to_string(),
-            |c| format!("{}°F", c.temperature as i32),
-        );
-
-        let header_text = vec![
-            Line::from(vec![
-                Span::styled(
-                    location_name.to_uppercase(),
-                    Style::default().fg(Color::White),
-                ),
-                Span::raw("  "),
-                Span::styled(temp_str, Style::default().fg(Color::Yellow)),
-            ]),
-            Line::from(self.current.as_ref().map_or_else(
-                || Span::raw("Loading..."),
-                |c| {
-                    Span::raw(format!(
-                        "Feels like {}°F | Wind {} mph {} | {} in",
-                        c.feels_like as i32, c.wind_speed as i32, c.wind_direction, c.pressure
-                    ))
-                },
-            )),
-        ];
-
-        let block = Block::default()
-            .borders(Borders::ALL)
-            .title(" Current Conditions ");
-
-        let paragraph = Paragraph::new(header_text).block(block);
-        frame.render_widget(paragraph, area);
+    fn render_header(&self, frame: &mut Frame, area: Rect, theme: &Theme) {
+        let data = HeaderData::from_state(self);
+        header::render(&data, theme, frame, area);
     }
 
-    fn render_main(&self, frame: &mut Frame, area: Rect) {
+    fn render_main(&self, frame: &mut Frame, area: Rect, theme: &Theme) {
         let tab_titles = ["1:Temp", "2:Precip", "3:Humidity", "4:Alerts"];
         let selected = match self.selected_tab {
             Tab::Temperature => 0,
@@ -352,9 +326,9 @@ impl AppState {
             .enumerate()
             .map(|(i, t)| {
                 if i == selected {
-                    Span::styled(format!("[{}]", t), Style::default().fg(Color::Yellow))
+                    Span::styled(format!("[{}]", t), Style::default().fg(theme.accent))
                 } else {
-                    Span::styled(format!(" {} ", t), Style::default().fg(Color::DarkGray))
+                    Span::styled(format!(" {} ", t), Style::default().fg(theme.muted))
                 }
             })
             .collect();
@@ -372,40 +346,18 @@ impl AppState {
             Line::from(content),
         ];
 
-        let block = Block::default().borders(Borders::ALL).title(" Forecast ");
+        let block = Block::default()
+            .borders(Borders::ALL)
+            .title(" Forecast ")
+            .border_style(Style::default().fg(theme.muted));
 
         let paragraph = Paragraph::new(text).block(block);
         frame.render_widget(paragraph, area);
     }
 
-    fn render_footer(&self, frame: &mut Frame, area: Rect) {
-        let input_line = match self.input_mode {
-            InputMode::Normal => Line::from(Span::raw("Press '/' to search, 'q' to quit")),
-            InputMode::Search => Line::from(vec![
-                Span::raw("> "),
-                Span::styled(&self.input_buffer, Style::default().fg(Color::Yellow)),
-                Span::styled("_", Style::default().fg(Color::White)),
-            ]),
-        };
-
-        let status_line = if self.loading {
-            Line::from(Span::styled("Loading...", Style::default().fg(Color::Cyan)))
-        } else if let Some(ref err) = self.error {
-            Line::from(Span::styled(err.as_str(), Style::default().fg(Color::Red)))
-        } else {
-            let updated = self.last_updated.map_or_else(
-                || "Never".to_string(),
-                |t| t.format("%I:%M %p").to_string(),
-            );
-            Line::from(format!("Updated: {} | q:quit r:refresh /:search", updated))
-        };
-
-        let text = vec![input_line, Line::from(""), status_line];
-
-        let block = Block::default().borders(Borders::ALL).title(" Status ");
-
-        let paragraph = Paragraph::new(text).block(block);
-        frame.render_widget(paragraph, area);
+    fn render_footer(&self, frame: &mut Frame, area: Rect, theme: &Theme) {
+        let data = FooterData::from_state(self);
+        footer::render(&data, theme, frame, area);
     }
 }
 
