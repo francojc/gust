@@ -45,13 +45,17 @@ fn convert_daily(d: DailyResponse) -> Vec<DailyForecast> {
     d.time
         .into_iter()
         .enumerate()
-        .map(|(i, date)| DailyForecast {
-            date,
-            temp_high: d.temperature_2m_max.get(i).copied().unwrap_or(0.0),
-            temp_low: d.temperature_2m_min.get(i).copied().unwrap_or(0.0),
-            precipitation_sum: d.precipitation_sum.get(i).copied().unwrap_or(0.0),
-            sunrise: d.sunrise.get(i).copied().unwrap_or(date),
-            sunset: d.sunset.get(i).copied().unwrap_or(date),
+        .map(|(i, date)| {
+            let default_sunrise = date.and_hms_opt(6, 0, 0).unwrap();
+            let default_sunset = date.and_hms_opt(18, 0, 0).unwrap();
+            DailyForecast {
+                date,
+                temp_high: d.temperature_2m_max.get(i).copied().unwrap_or(0.0),
+                temp_low: d.temperature_2m_min.get(i).copied().unwrap_or(0.0),
+                precipitation_sum: d.precipitation_sum.get(i).copied().unwrap_or(0.0),
+                sunrise: d.sunrise.get(i).copied().unwrap_or(default_sunrise),
+                sunset: d.sunset.get(i).copied().unwrap_or(default_sunset),
+            }
         })
         .collect()
 }

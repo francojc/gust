@@ -1,7 +1,61 @@
 //! API response types for Open-Meteo.
 
-use chrono::NaiveDateTime;
+use chrono::{NaiveDate, NaiveDateTime};
 use serde::{Deserialize, Serialize};
+
+/// Custom deserializer for NaiveDateTime without seconds (Open-Meteo format).
+mod datetime_no_seconds {
+    use chrono::NaiveDateTime;
+    use serde::{self, Deserialize, Deserializer, Serializer};
+
+    const FORMAT: &str = "%Y-%m-%dT%H:%M";
+
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<NaiveDateTime, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        NaiveDateTime::parse_from_str(&s, FORMAT).map_err(serde::de::Error::custom)
+    }
+
+    pub fn serialize<S>(dt: &NaiveDateTime, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_str(&dt.format(FORMAT).to_string())
+    }
+}
+
+/// Custom deserializer for Vec<NaiveDateTime> without seconds.
+mod datetime_no_seconds_vec {
+    use chrono::NaiveDateTime;
+    use serde::{self, Deserialize, Deserializer, Serializer};
+
+    const FORMAT: &str = "%Y-%m-%dT%H:%M";
+
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<Vec<NaiveDateTime>, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let strings: Vec<String> = Vec::deserialize(deserializer)?;
+        strings
+            .into_iter()
+            .map(|s| NaiveDateTime::parse_from_str(&s, FORMAT).map_err(serde::de::Error::custom))
+            .collect()
+    }
+
+    pub fn serialize<S>(dts: &Vec<NaiveDateTime>, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        use serde::ser::SerializeSeq;
+        let mut seq = serializer.serialize_seq(Some(dts.len()))?;
+        for dt in dts {
+            seq.serialize_element(&dt.format(FORMAT).to_string())?;
+        }
+        seq.end()
+    }
+}
 
 /// Response from the Open-Meteo forecast API.
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -17,6 +71,7 @@ pub struct ForecastResponse {
 /// Current weather data from API.
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct CurrentResponse {
+    #[serde(with = "datetime_no_seconds")]
     pub time: NaiveDateTime,
     pub temperature_2m: f64,
     pub apparent_temperature: f64,
@@ -30,6 +85,7 @@ pub struct CurrentResponse {
 /// Hourly forecast data from API.
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct HourlyResponse {
+    #[serde(with = "datetime_no_seconds_vec")]
     pub time: Vec<NaiveDateTime>,
     pub temperature_2m: Vec<f64>,
     pub precipitation_probability: Vec<u8>,
@@ -40,11 +96,13 @@ pub struct HourlyResponse {
 /// Daily forecast data from API.
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct DailyResponse {
-    pub time: Vec<NaiveDateTime>,
+    pub time: Vec<NaiveDate>,
     pub temperature_2m_max: Vec<f64>,
     pub temperature_2m_min: Vec<f64>,
     pub precipitation_sum: Vec<f64>,
+    #[serde(with = "datetime_no_seconds_vec")]
     pub sunrise: Vec<NaiveDateTime>,
+    #[serde(with = "datetime_no_seconds_vec")]
     pub sunset: Vec<NaiveDateTime>,
 }
 

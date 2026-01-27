@@ -68,22 +68,19 @@ pub fn mock_hourly() -> HourlyResponse {
 
 /// Create a mock daily forecast response.
 pub fn mock_daily() -> DailyResponse {
-    let base_date = NaiveDate::from_ymd_opt(2024, 1, 15)
-        .unwrap()
-        .and_hms_opt(0, 0, 0)
-        .unwrap();
+    let base_date = NaiveDate::from_ymd_opt(2024, 1, 15).unwrap();
     let days: Vec<_> = (0..7)
         .map(|d| base_date + TimeDelta::days(d))
         .collect();
 
     let sunrises: Vec<_> = days
         .iter()
-        .map(|d| *d + TimeDelta::hours(7) + TimeDelta::minutes(15))
+        .map(|d| d.and_hms_opt(7, 15, 0).unwrap())
         .collect();
 
     let sunsets: Vec<_> = days
         .iter()
-        .map(|d| *d + TimeDelta::hours(17) + TimeDelta::minutes(30))
+        .map(|d| d.and_hms_opt(17, 30, 0).unwrap())
         .collect();
 
     DailyResponse {

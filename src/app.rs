@@ -5,7 +5,7 @@
 
 #![allow(dead_code)]
 
-use chrono::{DateTime, NaiveDateTime, Utc};
+use chrono::{DateTime, NaiveDate, NaiveDateTime, Utc};
 use crossterm::event::KeyEvent;
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
@@ -51,7 +51,7 @@ pub struct HourlyForecast {
 /// Daily forecast data point.
 #[derive(Debug, Clone)]
 pub struct DailyForecast {
-    pub date: NaiveDateTime,
+    pub date: NaiveDate,
     pub temp_high: f64,
     pub temp_low: f64,
     pub precipitation_sum: f64,
