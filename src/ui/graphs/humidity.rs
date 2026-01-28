@@ -8,7 +8,7 @@ use ratatui::{
     Frame,
 };
 
-use super::{create_time_labels_with_dates, get_day_boundary_positions, x_position};
+use super::{create_day_labels, get_day_boundary_positions, get_tick_positions, x_position};
 use crate::app::HourlyForecast;
 use crate::ui::theme::Theme;
 
@@ -17,10 +17,14 @@ use crate::ui::theme::Theme;
 pub struct HumidityData {
     /// Data points as (x, y) tuples where x is time index and y is humidity percentage.
     pub points: Vec<(f64, f64)>,
-    /// X-axis labels.
+    /// X-axis labels (day names only).
     pub x_labels: Vec<String>,
+    /// X-positions for day labels.
+    pub label_positions: Vec<f64>,
     /// X-positions of day boundaries for rendering separator lines.
     pub day_boundaries: Vec<f64>,
+    /// X-positions for 6-hour tick marks.
+    pub tick_positions: Vec<f64>,
 }
 
 impl HumidityData {
@@ -36,13 +40,16 @@ impl HumidityData {
             .map(|(i, h)| (x_position(i, hourly.len()), h.humidity as f64))
             .collect();
 
-        let x_labels = create_time_labels_with_dates(hourly, timezone);
+        let (x_labels, label_positions) = create_day_labels(hourly, timezone);
         let day_boundaries = get_day_boundary_positions(hourly);
+        let tick_positions = get_tick_positions(hourly);
 
         Self {
             points,
             x_labels,
+            label_positions,
             day_boundaries,
+            tick_positions,
         }
     }
 
@@ -51,7 +58,9 @@ impl HumidityData {
         Self {
             points: vec![],
             x_labels: vec![],
+            label_positions: vec![],
             day_boundaries: vec![],
+            tick_positions: vec![],
         }
     }
 }
@@ -67,10 +76,24 @@ pub fn render(data: &HumidityData, theme: &Theme, frame: &mut Frame, area: Rect)
     let y_min = 0.0;
     let y_max = 100.0;
 
-    // Create datasets: main humidity line + day boundary separators
+    // Create datasets: main humidity line + day boundary separators + tick marks
     let mut datasets = Vec::new();
 
-    // Add day boundary separator lines first (so they render behind the data)
+    // Add 6-hour tick marks at the bottom of the chart
+    let tick_height = (y_max - y_min) * 0.05; // 5% of chart height
+    let tick_style = Style::default().fg(theme.muted);
+    for &x in &data.tick_positions {
+        let tick_data: Vec<(f64, f64)> = vec![(x, y_min), (x, y_min + tick_height)];
+        datasets.push(
+            Dataset::default()
+                .marker(Marker::Braille)
+                .graph_type(GraphType::Line)
+                .style(tick_style)
+                .data(tick_data.leak()),
+        );
+    }
+
+    // Add day boundary separator lines (so they render behind the data)
     let separator_style = Style::default().fg(theme.muted);
     for &x in &data.day_boundaries {
         let separator_data: Vec<(f64, f64)> = vec![(x, y_min), (x, y_max)];

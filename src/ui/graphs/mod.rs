@@ -54,10 +54,11 @@ pub fn create_time_labels(hourly: &[HourlyForecast]) -> Vec<Span<'static>> {
 }
 
 /// Format a date label relative to today.
-/// Returns "Today" for the current day, or 3-letter day name (e.g., "Wed", "Thu").
-pub fn format_date_label(date: NaiveDate, today: NaiveDate) -> String {
-    if date == today {
-        "Today".to_string()
+/// Returns "Now" for the first point, or 3-letter day name (e.g., "Wed", "Thu").
+pub fn format_date_label(date: NaiveDate, today: NaiveDate, is_first_point: bool) -> String {
+    let _ = today; // Keep for potential future use
+    if is_first_point {
+        "Now".to_string()
     } else {
         date.format("%a").to_string()
     }
@@ -95,7 +96,7 @@ pub fn get_local_today(timezone: Option<&str>) -> NaiveDate {
 
 /// Create X-axis labels with date boundaries marked.
 /// Shows date labels at day boundaries (midnight) and 24h time labels at 6-hour intervals.
-/// Pattern: Today, 6, 12, 18, Wed, 6, 12, 18, Thu, ...
+/// Pattern: Now, 6, 12, 18, Wed, 6, 12, 18, Thu, ...
 pub fn create_time_labels_with_dates(
     hourly: &[HourlyForecast],
     timezone: Option<&str>,
@@ -107,10 +108,11 @@ pub fn create_time_labels_with_dates(
     let today = get_local_today(timezone);
     let boundaries = find_day_boundaries(hourly);
 
-    // Create a map of boundary indices to their date labels
+    // Create a map of boundary indices to their date labels (excluding index 0)
     let boundary_map: std::collections::HashMap<usize, String> = boundaries
         .iter()
-        .map(|(idx, date)| (*idx, format_date_label(*date, today)))
+        .enumerate()
+        .map(|(i, (idx, date))| (*idx, format_date_label(*date, today, i == 0)))
         .collect();
 
     // Select labels at 6-hour intervals
@@ -131,16 +133,54 @@ pub fn create_time_labels_with_dates(
                         .any(|(b_idx, _)| *b_idx > prev_idx && *b_idx <= i && *b_idx != 0);
 
                     if has_boundary_between {
-                        if let Some((_, date)) = boundaries.iter().find(|(b_idx, _)| {
-                            *b_idx > prev_idx && *b_idx <= i && *b_idx != 0
-                        }) {
-                            return format_date_label(*date, today);
+                        if let Some((idx, (_, date))) = boundaries
+                            .iter()
+                            .enumerate()
+                            .find(|(_, (b_idx, _))| *b_idx > prev_idx && *b_idx <= i && *b_idx != 0)
+                        {
+                            return format_date_label(*date, today, idx == 0);
                         }
                     }
                     format_hour_24(&h.time)
                 }
             })
         })
+        .collect()
+}
+
+/// Create X-axis labels with only day names at day boundaries.
+/// Returns (labels, label_positions) where positions are x-coordinates.
+pub fn create_day_labels(
+    hourly: &[HourlyForecast],
+    timezone: Option<&str>,
+) -> (Vec<String>, Vec<f64>) {
+    if hourly.is_empty() {
+        return (vec![], vec![]);
+    }
+
+    let today = get_local_today(timezone);
+    let boundaries = find_day_boundaries(hourly);
+    let total = hourly.len();
+
+    let labels: Vec<String> = boundaries
+        .iter()
+        .enumerate()
+        .map(|(i, (_, date))| format_date_label(*date, today, i == 0))
+        .collect();
+
+    let positions: Vec<f64> = boundaries
+        .iter()
+        .map(|(idx, _)| x_position(*idx, total))
+        .collect();
+
+    (labels, positions)
+}
+
+/// Get X-axis positions for 6-hour interval tick marks.
+pub fn get_tick_positions(hourly: &[HourlyForecast]) -> Vec<f64> {
+    (0..hourly.len())
+        .step_by(6)
+        .map(|i| x_position(i, hourly.len()))
         .collect()
 }
 
@@ -244,25 +284,75 @@ mod tests {
     }
 
     #[test]
-    fn test_format_date_label_today() {
+    fn test_format_date_label_first_point() {
         let today = NaiveDate::from_ymd_opt(2024, 1, 15).unwrap();
-        assert_eq!(format_date_label(today, today), "Today");
+        // First point should show "Now" regardless of date
+        assert_eq!(format_date_label(today, today, true), "Now");
     }
 
     #[test]
-    fn test_format_date_label_tomorrow() {
+    fn test_format_date_label_not_first_point() {
         let today = NaiveDate::from_ymd_opt(2024, 1, 15).unwrap();
         let tomorrow = NaiveDate::from_ymd_opt(2024, 1, 16).unwrap();
-        // Now shows 3-letter day name instead of "Tomorrow"
-        assert_eq!(format_date_label(tomorrow, today), "Tue");
+        // Non-first points show 3-letter day name
+        assert_eq!(format_date_label(tomorrow, today, false), "Tue");
     }
 
     #[test]
     fn test_format_date_label_future() {
         let today = NaiveDate::from_ymd_opt(2024, 1, 15).unwrap();
         let future = NaiveDate::from_ymd_opt(2024, 1, 18).unwrap();
-        // Now shows only 3-letter day name without date number
-        assert_eq!(format_date_label(future, today), "Thu");
+        // Non-first points show only 3-letter day name
+        assert_eq!(format_date_label(future, today, false), "Thu");
+    }
+
+    #[test]
+    fn test_create_day_labels() {
+        let base_date = NaiveDate::from_ymd_opt(2024, 1, 15).unwrap();
+        let hourly: Vec<HourlyForecast> = (0..48)
+            .map(|i| {
+                let day_offset = i / 24;
+                let hour = i % 24;
+                let date = base_date
+                    .checked_add_days(chrono::Days::new(day_offset as u64))
+                    .unwrap();
+                HourlyForecast {
+                    time: date.and_hms_opt(hour as u32, 0, 0).unwrap(),
+                    temperature: 42.0,
+                    precipitation_probability: 10,
+                    humidity: 60,
+                    wind_speed: 5.0,
+                }
+            })
+            .collect();
+
+        let (labels, positions) = create_day_labels(&hourly, None);
+        assert_eq!(labels.len(), 2);
+        assert_eq!(labels[0], "Now"); // First point
+        assert_eq!(labels[1], "Tue"); // Second day boundary
+        assert_eq!(positions[0], 0.0);
+        assert_eq!(positions[1], 24.0);
+    }
+
+    #[test]
+    fn test_get_tick_positions() {
+        let base_date = NaiveDate::from_ymd_opt(2024, 1, 15).unwrap();
+        let hourly: Vec<HourlyForecast> = (0..24)
+            .map(|i| HourlyForecast {
+                time: base_date.and_hms_opt(i as u32, 0, 0).unwrap(),
+                temperature: 42.0,
+                precipitation_probability: 10,
+                humidity: 60,
+                wind_speed: 5.0,
+            })
+            .collect();
+
+        let positions = get_tick_positions(&hourly);
+        assert_eq!(positions.len(), 4); // indices 0, 6, 12, 18
+        assert_eq!(positions[0], 0.0);
+        assert_eq!(positions[1], 6.0);
+        assert_eq!(positions[2], 12.0);
+        assert_eq!(positions[3], 18.0);
     }
 
     #[test]
