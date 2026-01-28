@@ -1,13 +1,21 @@
 //! Convert API response types to application domain types.
 
 use crate::api::types::{CurrentResponse, DailyResponse, ForecastResponse, HourlyResponse};
-use crate::app::{CurrentWeather, DailyForecast, HourlyForecast, WeatherData};
+use crate::app::{CurrentWeather, DailyForecast, HourlyForecast, PrecipType, WeatherData};
 
 /// Convert a forecast API response to the app's WeatherData type.
 pub fn forecast_to_weather_data(resp: ForecastResponse) -> WeatherData {
+    let hourly = resp.hourly.map(convert_hourly).unwrap_or_default();
+
+    // Extract current UV from first hourly entry
+    let current_uv = hourly.first().map(|h| h.uv_index).unwrap_or(0.0);
+
+    let mut current = resp.current.map(convert_current).unwrap_or_default();
+    current.uv_index = current_uv;
+
     WeatherData {
-        current: resp.current.map(convert_current).unwrap_or_default(),
-        hourly: resp.hourly.map(convert_hourly).unwrap_or_default(),
+        current,
+        hourly,
         daily: resp.daily.map(convert_daily).unwrap_or_default(),
         timezone: resp.timezone,
     }
@@ -24,6 +32,7 @@ fn convert_current(c: CurrentResponse) -> CurrentWeather {
         pressure: c.surface_pressure,
         description: weather_code_to_description(c.weather_code),
         weather_code: c.weather_code,
+        uv_index: 0.0, // Will be set from hourly data
     }
 }
 
@@ -32,14 +41,33 @@ fn convert_hourly(h: HourlyResponse) -> Vec<HourlyForecast> {
     h.time
         .into_iter()
         .enumerate()
-        .map(|(i, time)| HourlyForecast {
-            time,
-            temperature: h.temperature_2m.get(i).copied().unwrap_or(0.0),
-            precipitation_probability: h.precipitation_probability.get(i).copied().unwrap_or(0),
-            humidity: h.relative_humidity_2m.get(i).copied().unwrap_or(0),
-            wind_speed: h.wind_speed_10m.get(i).copied().unwrap_or(0.0),
+        .map(|(i, time)| {
+            let weather_code = h.weather_code.get(i).copied().unwrap_or(0);
+            HourlyForecast {
+                time,
+                temperature: h.temperature_2m.get(i).copied().unwrap_or(0.0),
+                precipitation_probability: h.precipitation_probability.get(i).copied().unwrap_or(0),
+                humidity: h.relative_humidity_2m.get(i).copied().unwrap_or(0),
+                wind_speed: h.wind_speed_10m.get(i).copied().unwrap_or(0.0),
+                precip_type: weather_code_to_precip_type(weather_code),
+                uv_index: h.uv_index.get(i).copied().unwrap_or(0.0),
+            }
         })
         .collect()
+}
+
+/// Convert WMO weather code to precipitation type.
+fn weather_code_to_precip_type(code: u8) -> PrecipType {
+    match code {
+        // Rain codes: slight/moderate/heavy rain, rain showers
+        61..=65 | 80..=82 => PrecipType::Rain,
+        // Snow codes: slight/moderate/heavy snow, snow grains, snow showers
+        71..=77 | 85..=86 => PrecipType::Snow,
+        // Mixed: drizzle, freezing drizzle, freezing rain, thunderstorms
+        51..=57 | 66..=67 | 95..=99 => PrecipType::Mixed,
+        // No precipitation or other (clear, cloudy, fog)
+        _ => PrecipType::None,
+    }
 }
 
 /// Convert daily forecast API response to domain type.
@@ -57,6 +85,8 @@ fn convert_daily(d: DailyResponse) -> Vec<DailyForecast> {
                 precipitation_sum: d.precipitation_sum.get(i).copied().unwrap_or(0.0),
                 sunrise: d.sunrise.get(i).copied().unwrap_or(default_sunrise),
                 sunset: d.sunset.get(i).copied().unwrap_or(default_sunset),
+                uv_index_max: d.uv_index_max.get(i).copied().unwrap_or(0.0),
+                daylight_duration: d.daylight_duration.get(i).copied().unwrap_or(0.0),
             }
         })
         .collect()

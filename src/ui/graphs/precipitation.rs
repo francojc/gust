@@ -1,22 +1,28 @@
-//! Precipitation bar chart.
+//! Precipitation chart with color-coded precipitation types.
 
 use ratatui::{
     layout::Rect,
-    style::Style,
+    style::{Color, Style},
     symbols::Marker,
     widgets::{Axis, Block, Borders, Chart, Dataset, GraphType},
     Frame,
 };
 
 use super::{create_day_labels, get_day_boundary_positions, get_tick_positions, x_position};
-use crate::app::HourlyForecast;
+use crate::app::{HourlyForecast, PrecipType};
 use crate::ui::theme::Theme;
 
 /// Data structure for precipitation graph rendering.
 #[derive(Debug, Clone)]
 pub struct PrecipitationData {
-    /// Data points as (x, y) tuples where x is time index and y is precipitation probability.
-    pub points: Vec<(f64, f64)>,
+    /// Rain data points (x, y) - green color.
+    pub rain_points: Vec<(f64, f64)>,
+    /// Snow data points (x, y) - blue/violet color.
+    pub snow_points: Vec<(f64, f64)>,
+    /// Mixed precipitation data points (x, y) - slate blue color.
+    pub mixed_points: Vec<(f64, f64)>,
+    /// Total number of data points (for x-axis bounds).
+    pub total_points: usize,
     /// X-axis labels (day names only).
     pub x_labels: Vec<String>,
     /// X-positions for day labels.
@@ -29,23 +35,42 @@ pub struct PrecipitationData {
 
 impl PrecipitationData {
     /// Create precipitation data from hourly forecast.
-    pub fn from_hourly(hourly: &[HourlyForecast], timezone: Option<&str>) -> Self {
+    pub fn from_hourly(hourly: &[HourlyForecast], timezone: Option<&str>, use_24h: bool) -> Self {
         if hourly.is_empty() {
             return Self::empty();
         }
 
-        let points: Vec<(f64, f64)> = hourly
-            .iter()
-            .enumerate()
-            .map(|(i, h)| (x_position(i, hourly.len()), h.precipitation_probability as f64))
-            .collect();
+        let mut rain_points = Vec::new();
+        let mut snow_points = Vec::new();
+        let mut mixed_points = Vec::new();
 
-        let (x_labels, label_positions) = create_day_labels(hourly, timezone);
+        for (i, h) in hourly.iter().enumerate() {
+            let x = x_position(i, hourly.len());
+            let y = h.precipitation_probability as f64;
+
+            // Only add points where there's precipitation probability
+            if h.precipitation_probability > 0 {
+                match h.precip_type {
+                    PrecipType::Rain => rain_points.push((x, y)),
+                    PrecipType::Snow => snow_points.push((x, y)),
+                    PrecipType::Mixed => mixed_points.push((x, y)),
+                    PrecipType::None => {
+                        // If probability > 0 but type is None, default to rain
+                        rain_points.push((x, y));
+                    }
+                }
+            }
+        }
+
+        let (x_labels, label_positions) = create_day_labels(hourly, timezone, use_24h);
         let day_boundaries = get_day_boundary_positions(hourly);
         let tick_positions = get_tick_positions(hourly);
 
         Self {
-            points,
+            rain_points,
+            snow_points,
+            mixed_points,
+            total_points: hourly.len(),
             x_labels,
             label_positions,
             day_boundaries,
@@ -56,27 +81,37 @@ impl PrecipitationData {
     /// Create empty precipitation data.
     pub fn empty() -> Self {
         Self {
-            points: vec![],
+            rain_points: vec![],
+            snow_points: vec![],
+            mixed_points: vec![],
+            total_points: 0,
             x_labels: vec![],
             label_positions: vec![],
             day_boundaries: vec![],
             tick_positions: vec![],
         }
     }
+
+    /// Check if there's any precipitation data.
+    pub fn has_data(&self) -> bool {
+        !self.rain_points.is_empty()
+            || !self.snow_points.is_empty()
+            || !self.mixed_points.is_empty()
+    }
 }
 
 /// Render the precipitation graph.
 pub fn render(data: &PrecipitationData, theme: &Theme, frame: &mut Frame, area: Rect) {
-    if data.points.is_empty() {
+    if data.total_points == 0 {
         render_empty(theme, frame, area);
         return;
     }
 
-    let x_bounds = [0.0, (data.points.len() - 1).max(1) as f64];
+    let x_bounds = [0.0, (data.total_points - 1).max(1) as f64];
     let y_min = 0.0;
     let y_max = 100.0;
 
-    // Create datasets: main precipitation scatter + day boundary separators + tick marks
+    // Create datasets: tick marks + day boundaries + precipitation lines by type
     let mut datasets = Vec::new();
 
     // Add 6-hour tick marks at the bottom of the chart
@@ -106,15 +141,42 @@ pub fn render(data: &PrecipitationData, theme: &Theme, frame: &mut Frame, area: 
         );
     }
 
-    // Add main precipitation scatter
-    datasets.push(
-        Dataset::default()
-            .name("Precipitation %")
-            .marker(Marker::Block)
-            .graph_type(GraphType::Scatter)
-            .style(Style::default().fg(ratatui::style::Color::Blue))
-            .data(&data.points),
-    );
+    // Add precipitation lines by type with NOAA/NEXRAD-inspired colors
+    // Rain - Green (standard radar rain color)
+    if !data.rain_points.is_empty() {
+        datasets.push(
+            Dataset::default()
+                .name("Rain")
+                .marker(Marker::Braille)
+                .graph_type(GraphType::Line)
+                .style(Style::default().fg(Color::Green))
+                .data(data.rain_points.clone().leak()),
+        );
+    }
+
+    // Snow - Blue/Magenta (NWS heavy snow color)
+    if !data.snow_points.is_empty() {
+        datasets.push(
+            Dataset::default()
+                .name("Snow")
+                .marker(Marker::Braille)
+                .graph_type(GraphType::Line)
+                .style(Style::default().fg(Color::Magenta))
+                .data(data.snow_points.clone().leak()),
+        );
+    }
+
+    // Mixed - Cyan (freezing rain/sleet)
+    if !data.mixed_points.is_empty() {
+        datasets.push(
+            Dataset::default()
+                .name("Mixed")
+                .marker(Marker::Braille)
+                .graph_type(GraphType::Line)
+                .style(Style::default().fg(Color::Cyan))
+                .data(data.mixed_points.clone().leak()),
+        );
+    }
 
     let x_labels: Vec<ratatui::text::Span> = data
         .x_labels
@@ -177,12 +239,26 @@ mod tests {
     fn create_mock_hourly() -> Vec<HourlyForecast> {
         let base_date = NaiveDate::from_ymd_opt(2024, 1, 1).unwrap();
         (0..24)
-            .map(|i| HourlyForecast {
-                time: base_date.and_hms_opt(i, 0, 0).unwrap(),
-                temperature: 42.0,
-                precipitation_probability: ((i as f64 * 1.5) as u8).min(100),
-                humidity: 60,
-                wind_speed: 5.0,
+            .map(|i| {
+                // Assign precipitation types: 0-7 none, 8-15 rain, 16-19 snow, 20-23 mixed
+                let precip_type = if i < 8 {
+                    PrecipType::None
+                } else if i < 16 {
+                    PrecipType::Rain
+                } else if i < 20 {
+                    PrecipType::Snow
+                } else {
+                    PrecipType::Mixed
+                };
+                HourlyForecast {
+                    time: base_date.and_hms_opt(i, 0, 0).unwrap(),
+                    temperature: 42.0,
+                    precipitation_probability: ((i as f64 * 1.5) as u8).min(100),
+                    humidity: 60,
+                    wind_speed: 5.0,
+                    precip_type,
+                    uv_index: 0.0,
+                }
             })
             .collect()
     }
@@ -214,7 +290,7 @@ mod tests {
     #[test]
     fn test_precipitation_graph_renders() {
         let hourly = create_mock_hourly();
-        let data = PrecipitationData::from_hourly(&hourly, None);
+        let data = PrecipitationData::from_hourly(&hourly, None, false);
         let theme = Theme::dark();
         let output = render_to_string(&data, &theme);
         assert_snapshot!(output);
@@ -231,9 +307,15 @@ mod tests {
     #[test]
     fn test_precipitation_data_from_hourly() {
         let hourly = create_mock_hourly();
-        let data = PrecipitationData::from_hourly(&hourly, None);
+        let data = PrecipitationData::from_hourly(&hourly, None, false);
 
-        assert_eq!(data.points.len(), 24);
-        assert_eq!(data.points[0].1, 0.0);
+        assert_eq!(data.total_points, 24);
+        // Hours 0-7 have precip_probability 0-10, but type is None
+        // Hours 8-15 are Rain with probability 12-22
+        // Hours 16-19 are Snow with probability 24-28
+        // Hours 20-23 are Mixed with probability 30-34 (capped at 100)
+        assert!(!data.rain_points.is_empty());
+        assert!(!data.snow_points.is_empty());
+        assert!(!data.mixed_points.is_empty());
     }
 }

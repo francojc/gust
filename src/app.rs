@@ -49,6 +49,7 @@ pub struct CurrentWeather {
     pub pressure: f64,
     pub description: String,
     pub weather_code: u8,
+    pub uv_index: f64,
 }
 
 /// Hourly forecast data point.
@@ -59,6 +60,8 @@ pub struct HourlyForecast {
     pub precipitation_probability: u8,
     pub humidity: u8,
     pub wind_speed: f64,
+    pub precip_type: PrecipType,
+    pub uv_index: f64,
 }
 
 /// Daily forecast data point.
@@ -70,6 +73,8 @@ pub struct DailyForecast {
     pub precipitation_sum: f64,
     pub sunrise: NaiveDateTime,
     pub sunset: NaiveDateTime,
+    pub uv_index_max: f64,
+    pub daylight_duration: f64,
 }
 
 /// Weather alert.
@@ -81,12 +86,30 @@ pub struct WeatherAlert {
     pub expires: DateTime<Utc>,
 }
 
+/// Air quality data.
+#[derive(Debug, Clone, Default)]
+pub struct AirQuality {
+    pub aqi: u16,
+    pub pm2_5: f64,
+    pub pm10: f64,
+}
+
 /// Alert severity level.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AlertSeverity {
     Advisory,
     Watch,
     Warning,
+}
+
+/// Precipitation type derived from WMO weather codes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum PrecipType {
+    #[default]
+    None,
+    Rain,
+    Snow,
+    Mixed, // freezing rain, sleet, drizzle
 }
 
 /// Active tab in the main view.
@@ -115,6 +138,7 @@ pub struct AppState {
     pub hourly: Vec<HourlyForecast>,
     pub daily: Vec<DailyForecast>,
     pub alerts: Vec<WeatherAlert>,
+    pub air_quality: Option<AirQuality>,
     pub selected_tab: Tab,
     pub input_mode: InputMode,
     pub input_buffer: String,
@@ -137,6 +161,8 @@ pub enum Message {
     WeatherReceived(Result<WeatherData, String>),
     /// Weather alerts received from API.
     AlertsReceived(Result<Vec<WeatherAlert>, String>),
+    /// Air quality data received from API.
+    AirQualityReceived(Result<AirQuality, String>),
     /// Location search result received.
     LocationReceived(Result<GeocodingResult, String>),
     /// Timer tick for auto-refresh.
@@ -187,6 +213,7 @@ impl AppState {
             Message::Input(key) => self.handle_input(key),
             Message::WeatherReceived(result) => self.handle_weather_received(result),
             Message::AlertsReceived(result) => self.handle_alerts_received(result),
+            Message::AirQualityReceived(result) => self.handle_air_quality_received(result),
             Message::LocationReceived(result) => self.handle_location_received(result),
             Message::Tick => self.handle_tick(),
             Message::Refresh => self.handle_refresh(),
@@ -254,6 +281,16 @@ impl AppState {
         match result {
             Ok(alerts) => self.alerts = alerts,
             Err(e) => self.error = Some(e),
+        }
+    }
+
+    fn handle_air_quality_received(&mut self, result: Result<AirQuality, String>) {
+        match result {
+            Ok(aq) => self.air_quality = Some(aq),
+            Err(_) => {
+                // AQI is optional, don't show error to user
+                self.air_quality = None;
+            }
         }
     }
 
@@ -335,17 +372,18 @@ impl AppState {
 
         // Render selected content
         let tz = self.timezone.as_deref();
+        let use_24h = self.config.display.time_format == "24h";
         match self.selected_tab {
             Tab::Temperature => {
-                let data = TemperatureData::from_hourly(&self.hourly, tz);
+                let data = TemperatureData::from_hourly(&self.hourly, tz, use_24h);
                 temperature::render(&data, theme, frame, chunks[1]);
             }
             Tab::Precipitation => {
-                let data = PrecipitationData::from_hourly(&self.hourly, tz);
+                let data = PrecipitationData::from_hourly(&self.hourly, tz, use_24h);
                 precipitation::render(&data, theme, frame, chunks[1]);
             }
             Tab::Humidity => {
-                let data = HumidityData::from_hourly(&self.hourly, tz);
+                let data = HumidityData::from_hourly(&self.hourly, tz, use_24h);
                 humidity::render(&data, theme, frame, chunks[1]);
             }
             Tab::Alerts => {

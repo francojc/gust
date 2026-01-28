@@ -1,6 +1,7 @@
 //! gust - A terminal-based weather dashboard.
 
 mod app;
+mod astro;
 mod config;
 mod error;
 
@@ -22,8 +23,8 @@ use ratatui::prelude::*;
 use tokio::sync::mpsc;
 use tokio::time::sleep;
 
-use api::{convert, GeocodingClient, GeocodingResult, Units, WeatherClient};
-use app::{AppState, Message, WeatherData};
+use api::{convert, AlertsClient, GeocodingClient, GeocodingResult, Units, WeatherClient};
+use app::{AirQuality, AppState, Message, WeatherAlert, WeatherData};
 use cache::Cache;
 use config::AppConfig;
 
@@ -40,6 +41,8 @@ struct Cli {
 enum FetchResult {
     Weather(Result<WeatherData, String>),
     Location(Result<GeocodingResult, String>),
+    Alerts(Result<Vec<WeatherAlert>, String>),
+    AirQuality(Result<AirQuality, String>),
 }
 
 #[tokio::main]
@@ -143,10 +146,37 @@ async fn run(
                 match result {
                     FetchResult::Weather(data) => {
                         state.fetch_in_progress = false;
+                        let fetch_extra_needed = data.is_ok() && !state.location.name.is_empty();
                         state.update(Message::WeatherReceived(data));
+
+                        // Fetch alerts and AQI after successful weather data
+                        if fetch_extra_needed {
+                            let tx_alerts = tx.clone();
+                            let tx_aqi = tx.clone();
+                            let lat = state.location.latitude;
+                            let lon = state.location.longitude;
+
+                            // Fetch NWS alerts (US only)
+                            tokio::spawn(async move {
+                                let result = fetch_alerts(lat, lon).await;
+                                let _ = tx_alerts.send(FetchResult::Alerts(result)).await;
+                            });
+
+                            // Fetch AQI
+                            tokio::spawn(async move {
+                                let result = fetch_air_quality(lat, lon).await;
+                                let _ = tx_aqi.send(FetchResult::AirQuality(result)).await;
+                            });
+                        }
                     }
                     FetchResult::Location(loc) => {
                         state.update(Message::LocationReceived(loc));
+                    }
+                    FetchResult::Alerts(alerts) => {
+                        state.update(Message::AlertsReceived(alerts));
+                    }
+                    FetchResult::AirQuality(aq) => {
+                        state.update(Message::AirQualityReceived(aq));
                     }
                 }
             }
@@ -215,6 +245,31 @@ async fn fetch_location(query: &str) -> Result<GeocodingResult, String> {
                      city names (e.g., Winston-Salem) or search by ZIP code.",
                     query
                 ))
+            }
+        }
+        Err(e) => Err(e.to_string()),
+    }
+}
+
+/// Fetch weather alerts from NWS (US only).
+async fn fetch_alerts(lat: f64, lon: f64) -> Result<Vec<WeatherAlert>, String> {
+    let client = AlertsClient::new();
+    client.fetch(lat, lon).await
+}
+
+/// Fetch air quality data from Open-Meteo.
+async fn fetch_air_quality(lat: f64, lon: f64) -> Result<AirQuality, String> {
+    let client = WeatherClient::new(Units::Imperial);
+    match client.fetch_air_quality(lat, lon).await {
+        Ok(resp) => {
+            if let Some(current) = resp.current {
+                Ok(AirQuality {
+                    aqi: current.us_aqi,
+                    pm2_5: current.pm2_5,
+                    pm10: current.pm10,
+                })
+            } else {
+                Err("No air quality data available".to_string())
             }
         }
         Err(e) => Err(e.to_string()),

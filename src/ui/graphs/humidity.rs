@@ -29,7 +29,7 @@ pub struct HumidityData {
 
 impl HumidityData {
     /// Create humidity data from hourly forecast.
-    pub fn from_hourly(hourly: &[HourlyForecast], timezone: Option<&str>) -> Self {
+    pub fn from_hourly(hourly: &[HourlyForecast], timezone: Option<&str>, use_24h: bool) -> Self {
         if hourly.is_empty() {
             return Self::empty();
         }
@@ -40,7 +40,7 @@ impl HumidityData {
             .map(|(i, h)| (x_position(i, hourly.len()), h.humidity as f64))
             .collect();
 
-        let (x_labels, label_positions) = create_day_labels(hourly, timezone);
+        let (x_labels, label_positions) = create_day_labels(hourly, timezone, use_24h);
         let day_boundaries = get_day_boundary_positions(hourly);
         let tick_positions = get_tick_positions(hourly);
 
@@ -175,6 +175,7 @@ mod tests {
     use ratatui::{backend::TestBackend, Terminal};
 
     fn create_mock_hourly() -> Vec<HourlyForecast> {
+        use crate::app::PrecipType;
         let base_date = NaiveDate::from_ymd_opt(2024, 1, 1).unwrap();
         (0..24)
             .map(|i| HourlyForecast {
@@ -183,6 +184,8 @@ mod tests {
                 precipitation_probability: 10,
                 humidity: 54 + ((i as f64 * 1.0) as u8),
                 wind_speed: 5.0,
+                precip_type: PrecipType::None,
+                uv_index: 0.0,
             })
             .collect()
     }
@@ -214,7 +217,7 @@ mod tests {
     #[test]
     fn test_humidity_graph_renders() {
         let hourly = create_mock_hourly();
-        let data = HumidityData::from_hourly(&hourly, None);
+        let data = HumidityData::from_hourly(&hourly, None, false);
         let theme = Theme::dark();
         let output = render_to_string(&data, &theme);
         assert_snapshot!(output);
@@ -231,7 +234,7 @@ mod tests {
     #[test]
     fn test_humidity_data_from_hourly() {
         let hourly = create_mock_hourly();
-        let data = HumidityData::from_hourly(&hourly, None);
+        let data = HumidityData::from_hourly(&hourly, None, false);
 
         assert_eq!(data.points.len(), 24);
         assert_eq!(data.points[0].1, 54.0);

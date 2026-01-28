@@ -91,6 +91,9 @@ pub struct HourlyResponse {
     pub precipitation_probability: Vec<u8>,
     pub relative_humidity_2m: Vec<u8>,
     pub wind_speed_10m: Vec<f64>,
+    pub weather_code: Vec<u8>,
+    #[serde(default)]
+    pub uv_index: Vec<f64>,
 }
 
 /// Daily forecast data from API.
@@ -104,6 +107,24 @@ pub struct DailyResponse {
     pub sunrise: Vec<NaiveDateTime>,
     #[serde(with = "datetime_no_seconds_vec")]
     pub sunset: Vec<NaiveDateTime>,
+    #[serde(default)]
+    pub uv_index_max: Vec<f64>,
+    #[serde(default)]
+    pub daylight_duration: Vec<f64>,
+}
+
+/// Response from the Open-Meteo Air Quality API.
+#[derive(Debug, Clone, Deserialize)]
+pub struct AirQualityResponse {
+    pub current: Option<AirQualityCurrent>,
+}
+
+/// Current air quality data from API.
+#[derive(Debug, Clone, Deserialize)]
+pub struct AirQualityCurrent {
+    pub us_aqi: u16,
+    pub pm2_5: f64,
+    pub pm10: f64,
 }
 
 /// Response from the Open-Meteo geocoding API.

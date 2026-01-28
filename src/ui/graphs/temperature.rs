@@ -33,7 +33,7 @@ pub struct TemperatureData {
 
 impl TemperatureData {
     /// Create temperature data from hourly forecast.
-    pub fn from_hourly(hourly: &[HourlyForecast], timezone: Option<&str>) -> Self {
+    pub fn from_hourly(hourly: &[HourlyForecast], timezone: Option<&str>, use_24h: bool) -> Self {
         if hourly.is_empty() {
             return Self::empty();
         }
@@ -47,7 +47,7 @@ impl TemperatureData {
             .map(|(i, h)| (x_position(i, hourly.len()), h.temperature))
             .collect();
 
-        let (x_labels, label_positions) = create_day_labels(hourly, timezone);
+        let (x_labels, label_positions) = create_day_labels(hourly, timezone, use_24h);
         let y_labels = Self::create_y_labels(y_bounds);
         let day_boundaries = get_day_boundary_positions(hourly);
         let tick_positions = get_tick_positions(hourly);
@@ -200,6 +200,7 @@ mod tests {
     use ratatui::{backend::TestBackend, Terminal};
 
     fn create_mock_hourly() -> Vec<HourlyForecast> {
+        use crate::app::PrecipType;
         let base_date = NaiveDate::from_ymd_opt(2024, 1, 1).unwrap();
         (0..24)
             .map(|i| HourlyForecast {
@@ -208,6 +209,8 @@ mod tests {
                 precipitation_probability: 10,
                 humidity: 60,
                 wind_speed: 5.0,
+                precip_type: PrecipType::None,
+                uv_index: 0.0,
             })
             .collect()
     }
@@ -239,7 +242,7 @@ mod tests {
     #[test]
     fn test_temperature_graph_renders() {
         let hourly = create_mock_hourly();
-        let data = TemperatureData::from_hourly(&hourly, None);
+        let data = TemperatureData::from_hourly(&hourly, None, false);
         let theme = Theme::dark();
         let output = render_to_string(&data, &theme);
         assert_snapshot!(output);
@@ -256,7 +259,7 @@ mod tests {
     #[test]
     fn test_temperature_data_from_hourly() {
         let hourly = create_mock_hourly();
-        let data = TemperatureData::from_hourly(&hourly, None);
+        let data = TemperatureData::from_hourly(&hourly, None, false);
 
         assert_eq!(data.points.len(), 24);
         assert!(data.y_bounds[0] < 32.0);
@@ -266,7 +269,7 @@ mod tests {
     #[test]
     fn test_temperature_data_empty() {
         let hourly: Vec<HourlyForecast> = vec![];
-        let data = TemperatureData::from_hourly(&hourly, None);
+        let data = TemperatureData::from_hourly(&hourly, None, false);
 
         assert!(data.points.is_empty());
         assert_eq!(data.y_bounds, [0.0, 100.0]);

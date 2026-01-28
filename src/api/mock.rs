@@ -63,6 +63,16 @@ pub fn mock_hourly() -> HourlyResponse {
             8.0, 7.0, 6.0, 5.0, 5.0, 6.0, 8.0, 10.0, 12.0, 14.0, 15.0, 16.0,
             16.0, 15.0, 14.0, 12.0, 10.0, 8.0, 7.0, 6.0, 6.0, 6.0, 7.0, 8.0,
         ],
+        // Weather codes: mix of clear(0-2), rain(61-63), snow(71-73), mixed(51-53)
+        weather_code: vec![
+            0, 0, 0, 0, 0, 2, 51, 53, 61, 63, 63, 61,
+            71, 73, 71, 61, 53, 51, 2, 0, 0, 0, 0, 0,
+        ],
+        // UV index: low at night/morning, peak at midday
+        uv_index: vec![
+            0.0, 0.0, 0.0, 0.0, 0.0, 0.5, 1.0, 2.0, 3.5, 5.0, 6.5, 7.0,
+            6.5, 5.0, 3.5, 2.0, 1.0, 0.5, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+        ],
     }
 }
 
@@ -90,6 +100,10 @@ pub fn mock_daily() -> DailyResponse {
         precipitation_sum: vec![0.0, 0.1, 0.5, 0.0, 0.0, 0.2, 0.0],
         sunrise: sunrises,
         sunset: sunsets,
+        uv_index_max: vec![5.0, 6.0, 4.0, 7.0, 8.0, 5.0, 4.0],
+        daylight_duration: vec![
+            36900.0, 37020.0, 37140.0, 37260.0, 37380.0, 37500.0, 37620.0,
+        ], // ~10h 15m in seconds
     }
 }
 

@@ -54,11 +54,11 @@ pub fn create_time_labels(hourly: &[HourlyForecast]) -> Vec<Span<'static>> {
 }
 
 /// Format a date label relative to today.
-/// Returns "Now" for the first point, or 3-letter day name (e.g., "Wed", "Thu").
+/// Returns "Today" for the first point, or 3-letter day name (e.g., "Wed", "Thu").
 pub fn format_date_label(date: NaiveDate, today: NaiveDate, is_first_point: bool) -> String {
     let _ = today; // Keep for potential future use
     if is_first_point {
-        "Now".to_string()
+        "Today".to_string()
     } else {
         date.format("%a").to_string()
     }
@@ -96,7 +96,7 @@ pub fn get_local_today(timezone: Option<&str>) -> NaiveDate {
 
 /// Create X-axis labels with date boundaries marked.
 /// Shows date labels at day boundaries (midnight) and 24h time labels at 6-hour intervals.
-/// Pattern: Now, 6, 12, 18, Wed, 6, 12, 18, Thu, ...
+/// Pattern: Today, 6, 12, 18, Wed, 6, 12, 18, Thu, ...
 pub fn create_time_labels_with_dates(
     hourly: &[HourlyForecast],
     timezone: Option<&str>,
@@ -153,6 +153,7 @@ pub fn create_time_labels_with_dates(
 pub fn create_day_labels(
     hourly: &[HourlyForecast],
     timezone: Option<&str>,
+    _use_24h: bool,
 ) -> (Vec<String>, Vec<f64>) {
     if hourly.is_empty() {
         return (vec![], vec![]);
@@ -286,8 +287,8 @@ mod tests {
     #[test]
     fn test_format_date_label_first_point() {
         let today = NaiveDate::from_ymd_opt(2024, 1, 15).unwrap();
-        // First point should show "Now" regardless of date
-        assert_eq!(format_date_label(today, today, true), "Now");
+        // First point should show "Today" regardless of date
+        assert_eq!(format_date_label(today, today, true), "Today");
     }
 
     #[test]
@@ -308,6 +309,7 @@ mod tests {
 
     #[test]
     fn test_create_day_labels() {
+        use crate::app::PrecipType;
         let base_date = NaiveDate::from_ymd_opt(2024, 1, 15).unwrap();
         let hourly: Vec<HourlyForecast> = (0..48)
             .map(|i| {
@@ -322,13 +324,15 @@ mod tests {
                     precipitation_probability: 10,
                     humidity: 60,
                     wind_speed: 5.0,
+                    precip_type: PrecipType::None,
+                    uv_index: 0.0,
                 }
             })
             .collect();
 
-        let (labels, positions) = create_day_labels(&hourly, None);
+        let (labels, positions) = create_day_labels(&hourly, None, false);
         assert_eq!(labels.len(), 2);
-        assert_eq!(labels[0], "Now"); // First point
+        assert_eq!(labels[0], "Today"); // First point
         assert_eq!(labels[1], "Tue"); // Second day boundary
         assert_eq!(positions[0], 0.0);
         assert_eq!(positions[1], 24.0);
@@ -336,6 +340,7 @@ mod tests {
 
     #[test]
     fn test_get_tick_positions() {
+        use crate::app::PrecipType;
         let base_date = NaiveDate::from_ymd_opt(2024, 1, 15).unwrap();
         let hourly: Vec<HourlyForecast> = (0..24)
             .map(|i| HourlyForecast {
@@ -344,6 +349,8 @@ mod tests {
                 precipitation_probability: 10,
                 humidity: 60,
                 wind_speed: 5.0,
+                precip_type: PrecipType::None,
+                uv_index: 0.0,
             })
             .collect();
 
@@ -387,6 +394,7 @@ mod tests {
 
     #[test]
     fn test_get_day_boundary_positions() {
+        use crate::app::PrecipType;
         let base_date = NaiveDate::from_ymd_opt(2024, 1, 15).unwrap();
         let hourly: Vec<HourlyForecast> = (0..48)
             .map(|i| {
@@ -401,6 +409,8 @@ mod tests {
                     precipitation_probability: 10,
                     humidity: 60,
                     wind_speed: 5.0,
+                    precip_type: PrecipType::None,
+                    uv_index: 0.0,
                 }
             })
             .collect();
@@ -413,6 +423,7 @@ mod tests {
 
     #[test]
     fn test_find_day_boundaries() {
+        use crate::app::PrecipType;
         let base_date = NaiveDate::from_ymd_opt(2024, 1, 15).unwrap();
         let hourly: Vec<HourlyForecast> = (0..48)
             .map(|i| {
@@ -427,6 +438,8 @@ mod tests {
                     precipitation_probability: 10,
                     humidity: 60,
                     wind_speed: 5.0,
+                    precip_type: PrecipType::None,
+                    uv_index: 0.0,
                 }
             })
             .collect();
