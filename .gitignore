@@ -18,3 +18,9 @@ Thumbs.db
 
 # Aider
 .aider*
+
+# Secrets and environment
+.env
+.env.local
+credentials.json
+*.pem
